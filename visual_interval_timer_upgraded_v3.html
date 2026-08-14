@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interval Timer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #090a0d;
+      --panel: #17191f;
+      --card: #101216;
+      --border: #30333d;
+      --muted: #969ba8;
+      --text: #f5f6f8;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 20px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% -15%, rgba(239, 68, 68, 0.13), transparent 42%),
+        linear-gradient(145deg, #111318, var(--bg) 60%);
+      color: var(--text);
+    }
+
+    button, input, select { font: inherit; }
+
+    .panel {
+      width: min(700px, 100%);
+      padding: clamp(20px, 4vw, 34px);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: rgba(23, 25, 31, 0.96);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.46);
+      position: relative;
+      z-index: 2;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 42px);
+      letter-spacing: -0.045em;
+    }
+
+    .state {
+      min-width: 90px;
+      padding: 9px 13px;
+      border: 1px solid #3a3d47;
+      border-radius: 999px;
+      background: #111318;
+      color: #c4c7cf;
+      font-size: 13px;
+      font-weight: 750;
+      text-align: center;
+    }
+
+    body.running .state,
+    body.alarming .state {
+      border-color: rgba(239, 68, 68, 0.65);
+      background: rgba(239, 68, 68, 0.14);
+      color: #ffaaaa;
+    }
+
+    .timer-card {
+      padding: 27px 22px 21px;
+      border: 1px solid #2d3038;
+      border-radius: 18px;
+      background: var(--card);
+      text-align: center;
+    }
+
+    .timer-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .timer {
+      margin: 5px 0 16px;
+      font-size: clamp(72px, 16vw, 122px);
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      letter-spacing: -0.065em;
+    }
+
+    .progress-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+      color: #c8cbd3;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .progress-row span:last-child { color: var(--muted); }
+
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #292c34;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #c92828, #ff6262);
+      transition: width 220ms ease;
+    }
+
+    .status {
+      min-height: 21px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 10px;
+      margin: 18px 0 23px;
+    }
+
+    button {
+      min-height: 46px;
+      padding: 11px 14px;
+      border: 1px solid #383b45;
+      border-radius: 11px;
+      background: #24272e;
+      color: var(--text);
+      font-weight: 760;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: #555965;
+      background: #2d3038;
+    }
+
+    button.primary {
+      border-color: #f05252;
+      background: var(--red);
+    }
+
+    button.alert-now {
+      border-color: rgba(239, 68, 68, 0.42);
+      background: rgba(239, 68, 68, 0.11);
+      color: #ff9797;
+    }
+
+    button:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
+
+    .settings {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .sound-settings {
+      display: grid;
+      grid-template-columns: 1.05fr 1.2fr 0.8fr 1.7fr auto;
+      gap: 12px;
+      align-items: end;
+      margin-top: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: #b9bdc7;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #343741;
+      border-radius: 10px;
+      outline: none;
+      background: #0e1014;
+      color: white;
+      font-size: 15px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input:focus, select:focus {
+      border-color: rgba(239, 68, 68, 0.8);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+    }
+
+    input:disabled, select:disabled {
+      opacity: 0.52;
+      cursor: not-allowed;
+    }
+
+    .toggle, .range {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border: 1px solid #343741;
+      border-radius: 10px;
+      background: #0e1014;
+      color: #d4d6dc;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .toggle input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: var(--red);
+    }
+
+    input[type="range"] {
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      accent-color: var(--red);
+    }
+
+    .volume-value {
+      min-width: 45px;
+      text-align: right;
+      font-size: 13px;
+    }
+
+    .mute.is-muted {
+      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.12);
+      color: #ff9797;
+    }
+
+    .flash {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0;
+      border: 0 solid #ff1717;
+      background: transparent;
+    }
+
+    .flash.active {
+      animation: alertFlash 560ms ease-out;
+    }
+
+    @keyframes alertFlash {
+      0%   { opacity: 0; border-width: 0; background: rgba(255, 0, 0, 0); }
+      12%  { opacity: 1; border-width: 32px; background: rgba(255, 0, 0, 0.74); }
+      42%  { opacity: 1; border-width: 20px; background: rgba(255, 0, 0, 0.28); }
+      72%  { opacity: 1; border-width: 28px; background: rgba(255, 0, 0, 0.50); }
+      100% { opacity: 0; border-width: 0; background: rgba(255, 0, 0, 0); }
+    }
+
+    @media (max-width: 720px) {
+      .settings, .sound-settings {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 470px) {
+      body { padding: 12px; }
+      .panel { padding: 19px 15px; border-radius: 18px; }
+      .actions, .settings, .sound-settings { grid-template-columns: 1fr; }
+      .timer-card { padding-inline: 14px; }
+      .timer { font-size: clamp(62px, 24vw, 96px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="top">
+      <h1>Interval Timer</h1>
+      <div id="state" class="state">Ready</div>
+    </div>
+
+    <section class="timer-card">
+      <div id="timerLabel" class="timer-label">Next alert in</div>
+      <div id="timer" class="timer">01:02</div>
+
+      <div class="progress-row">
+        <span id="progressText">0 of 29</span>
+        <span id="progressPercent">0%</span>
+      </div>
+
+      <div class="progress-track">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+
+      <div id="status" class="status">Ready</div>
+    </section>
+
+    <div class="actions">
+      <button id="startButton" class="primary">Start</button>
+      <button id="alertNowButton" class="alert-now" disabled>Alert Now</button>
+      <button id="resetButton">Reset</button>
+    </div>
+
+    <div class="settings">
+      <label>
+        Interval
+        <input id="intervalSeconds" type="number" min="0.1" step="0.1" value="62" />
+      </label>
+
+      <label>
+        Alerts
+        <input id="repeatCount" type="number" min="1" step="1" value="29" />
+      </label>
+
+      <label>
+        Flash
+        <input id="flashDuration" type="number" min="0.1" step="0.1" value="3" />
+      </label>
+
+      <label>
+        Final repeat
+        <input id="completionRepeatSeconds" type="number" min="1" step="0.5" value="3" />
+      </label>
+    </div>
+
+    <div class="sound-settings">
+      <label>
+        Sound
+        <span class="toggle">
+          <input id="soundEnabled" type="checkbox" checked />
+          Enabled
+        </span>
+      </label>
+
+      <label>
+        Style
+        <select id="soundStyle">
+          <option value="soft-chime">Soft chime</option>
+          <option value="gentle-beep" selected>Gentle beep</option>
+          <option value="glass-ping">Glass ping</option>
+        </select>
+      </label>
+
+      <label>
+        Beeps
+        <input id="beepCount" type="number" min="1" max="12" step="1" value="2" />
+      </label>
+
+      <label>
+        Volume
+        <span class="range">
+          <input id="volumeSlider" type="range" min="0" max="200" step="1" value="200" />
+          <span id="volumeValue" class="volume-value">200%</span>
+        </span>
+      </label>
+
+      <button id="muteButton" class="mute" type="button">Mute</button>
+    </div>
+  </main>
+
+  <div id="flash" class="flash"></div>
+
+  <script>
+    const intervalInput = document.getElementById("intervalSeconds");
+    const repeatInput = document.getElementById("repeatCount");
+    const flashDurationInput = document.getElementById("flashDuration");
+    const completionRepeatInput = document.getElementById("completionRepeatSeconds");
+    const beepCountInput = document.getElementById("beepCount");
+
+    const startButton = document.getElementById("startButton");
+    const alertNowButton = document.getElementById("alertNowButton");
+    const resetButton = document.getElementById("resetButton");
+
+    const timerDisplay = document.getElementById("timer");
+    const timerLabel = document.getElementById("timerLabel");
+    const stateDisplay = document.getElementById("state");
+    const statusDisplay = document.getElementById("status");
+    const progressText = document.getElementById("progressText");
+    const progressPercent = document.getElementById("progressPercent");
+    const progressFill = document.getElementById("progressFill");
+    const flashElement = document.getElementById("flash");
+
+    const soundEnabledInput = document.getElementById("soundEnabled");
+    const soundStyleSelect = document.getElementById("soundStyle");
+    const volumeSlider = document.getElementById("volumeSlider");
+    const volumeValue = document.getElementById("volumeValue");
+    const muteButton = document.getElementById("muteButton");
+
+    const lockedInputs = [
+      intervalInput,
+      repeatInput,
+      flashDurationInput,
+      completionRepeatInput,
+      beepCountInput
+    ];
+
+    let running = false;
+    let alarming = false;
+    let completedAlerts = 0;
+    let nextAlertAt = 0;
+    let tickHandle = null;
+    let completionHandle = null;
+    let activeSettings = null;
+    let wakeLock = null;
+    let audioContext = null;
+    let muted = false;
+    let flashHandles = [];
+    let soundHandles = [];
+
+    const FLASH_PULSE_GAP_MS = 620;
+    const SOUND_REPEAT_GAP_MS = 650;
+
+    function settings() {
+      return {
+        intervalMs: Math.max(100, (Number(intervalInput.value) || 62) * 1000),
+        repeatCount: Math.max(1, Math.floor(Number(repeatInput.value) || 29)),
+        flashDurationMs: Math.max(100, (Number(flashDurationInput.value) || 3) * 1000),
+        completionRepeatMs: Math.max(1000, (Number(completionRepeatInput.value) || 3) * 1000),
+        beepCount: Math.max(1, Math.min(12, Math.floor(Number(beepCountInput.value) || 2)))
+      };
+    }
+
+    function formatTime(milliseconds) {
+      const total = Math.max(0, Math.ceil(milliseconds / 1000));
+      const minutes = Math.floor(total / 60);
+      const seconds = total % 60;
+      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function lockTimerSettings(locked) {
+      lockedInputs.forEach((input) => {
+        input.disabled = locked;
+      });
+    }
+
+    function updateProgress(currentSettings = activeSettings || settings()) {
+      const percent = Math.min(100, (completedAlerts / currentSettings.repeatCount) * 100);
+      progressText.textContent = `${completedAlerts} of ${currentSettings.repeatCount}`;
+      progressPercent.textContent = `${Math.round(percent)}%`;
+      progressFill.style.width = `${percent}%`;
+    }
+
+    function triggerFlashPulse() {
+      flashElement.classList.remove("active");
+      void flashElement.offsetWidth;
+      flashElement.classList.add("active");
+    }
+
+    function triggerFlashBurst() {
+      const pulseCount = Math.max(
+        1,
+        Math.ceil(activeSettings.flashDurationMs / FLASH_PULSE_GAP_MS)
+      );
+
+      for (let index = 0; index < pulseCount; index += 1) {
+        const handle = setTimeout(
+          triggerFlashPulse,
+          index * FLASH_PULSE_GAP_MS
+        );
+        flashHandles.push(handle);
+      }
+    }
+
+    async function ensureAudio() {
+      if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error("Audio is not supported.");
+        audioContext = new AudioContextClass();
+      }
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      return audioContext;
+    }
+
+    function outputLevel() {
+      if (muted || !soundEnabledInput.checked) return 0;
+      return Math.max(0, Math.min(2, Number(volumeSlider.value) / 100));
+    }
+
+    function tone(context, frequency, start, duration, peak, release, type = "sine") {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const compressor = context.createDynamicsCompressor();
+      const level = Math.max(0.0001, peak * outputLevel());
+
+      compressor.threshold.setValueAtTime(-12, start);
+      compressor.knee.setValueAtTime(8, start);
+      compressor.ratio.setValueAtTime(6, start);
+      compressor.attack.setValueAtTime(0.003, start);
+      compressor.release.setValueAtTime(0.15, start);
+
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, start);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(level, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration + release);
+
+      oscillator.connect(gain);
+      gain.connect(compressor);
+      compressor.connect(context.destination);
+
+      oscillator.start(start);
+      oscillator.stop(start + duration + release + 0.04);
+    }
+
+    async function playSoundOnce() {
+      if (muted || !soundEnabledInput.checked) return;
+
+      const context = await ensureAudio();
+      const now = context.currentTime + 0.02;
+
+      if (soundStyleSelect.value === "soft-chime") {
+        tone(context, 523.25, now, 0.14, 0.20, 0.32);
+        tone(context, 659.25, now + 0.11, 0.14, 0.16, 0.34);
+        tone(context, 783.99, now + 0.22, 0.11, 0.12, 0.30);
+        return;
+      }
+
+      if (soundStyleSelect.value === "glass-ping") {
+        tone(context, 880, now, 0.06, 0.24, 0.36);
+        tone(context, 1320, now, 0.04, 0.13, 0.28);
+        return;
+      }
+
+      // One gentle beep. The second frequency is layered, not delayed.
+      tone(context, 560, now, 0.13, 0.36, 0.14);
+      tone(context, 700, now, 0.11, 0.18, 0.13);
+    }
+
+    function playSoundBurst() {
+      if (muted || !soundEnabledInput.checked) return;
+
+      for (let index = 0; index < activeSettings.beepCount; index += 1) {
+        const handle = setTimeout(() => {
+          playSoundOnce().catch((error) => {
+            console.warn("Sound failed:", error);
+          });
+        }, index * SOUND_REPEAT_GAP_MS);
+
+        soundHandles.push(handle);
+      }
+    }
+
+    function triggerAlert() {
+      triggerFlashBurst();
+      playSoundBurst();
+    }
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+        }
+      } catch (error) {
+        console.warn("Wake lock unavailable:", error);
+      }
+    }
+
+    async function releaseWakeLock() {
+      try {
+        if (wakeLock) {
+          await wakeLock.release();
+          wakeLock = null;
+        }
+      } catch (error) {
+        console.warn("Wake lock release failed:", error);
+      }
+    }
+
+    function clearTimers() {
+      clearTimeout(tickHandle);
+      clearInterval(completionHandle);
+
+      flashHandles.forEach(clearTimeout);
+      soundHandles.forEach(clearTimeout);
+
+      flashHandles = [];
+      soundHandles = [];
+      tickHandle = null;
+      completionHandle = null;
+    }
+
+    function beginCompletionAlarm() {
+      running = false;
+      alarming = true;
+      clearTimeout(tickHandle);
+      tickHandle = null;
+
+      document.body.classList.remove("running");
+      document.body.classList.add("alarming");
+
+      stateDisplay.textContent = "Complete";
+      timerLabel.textContent = "Completed";
+      timerDisplay.textContent = "DONE";
+      statusDisplay.textContent = "Press Reset";
+
+      startButton.disabled = true;
+      alertNowButton.disabled = true;
+
+      completionHandle = setInterval(() => {
+        triggerAlert();
+      }, activeSettings.completionRepeatMs);
+    }
+
+    function completeNextAlert(manual = false) {
+      if (!running) return;
+
+      completedAlerts += 1;
+      triggerAlert();
+      updateProgress();
+
+      if (completedAlerts >= activeSettings.repeatCount) {
+        beginCompletionAlarm();
+        return;
+      }
+
+      statusDisplay.textContent = `Alert ${completedAlerts}`;
+
+      if (manual) {
+        nextAlertAt = performance.now() + activeSettings.intervalMs;
+      } else {
+        nextAlertAt += activeSettings.intervalMs;
+        while (nextAlertAt <= performance.now()) {
+          nextAlertAt += activeSettings.intervalMs;
+        }
+      }
+    }
+
+    function tick() {
+      if (!running) return;
+
+      const remaining = nextAlertAt - performance.now();
+      timerDisplay.textContent = formatTime(remaining);
+
+      if (remaining <= 0) {
+        completeNextAlert(false);
+      }
+
+      if (running) {
+        tickHandle = setTimeout(tick, 50);
+      }
+    }
+
+    async function startTimer() {
+      try {
+        await ensureAudio();
+      } catch (error) {
+        console.warn("Audio initialization failed:", error);
+      }
+
+      clearTimers();
+      activeSettings = settings();
+      running = true;
+      alarming = false;
+      completedAlerts = 0;
+      nextAlertAt = performance.now() + activeSettings.intervalMs;
+
+      document.body.classList.remove("alarming");
+      document.body.classList.add("running");
+
+      lockTimerSettings(true);
+      startButton.disabled = true;
+      alertNowButton.disabled = false;
+
+      stateDisplay.textContent = "Running";
+      timerLabel.textContent = "Next alert in";
+      timerDisplay.textContent = formatTime(activeSettings.intervalMs);
+      statusDisplay.textContent = "Running";
+      updateProgress();
+
+      await requestWakeLock();
+      tick();
+    }
+
+    function resetTimer() {
+      clearTimers();
+      running = false;
+      alarming = false;
+      activeSettings = null;
+      completedAlerts = 0;
+
+      document.body.classList.remove("running", "alarming");
+      flashElement.classList.remove("active");
+
+      lockTimerSettings(false);
+      startButton.disabled = false;
+      alertNowButton.disabled = true;
+
+      stateDisplay.textContent = "Ready";
+      timerLabel.textContent = "Next alert in";
+      timerDisplay.textContent = formatTime(settings().intervalMs);
+      statusDisplay.textContent = "Ready";
+      updateProgress(settings());
+
+      releaseWakeLock();
+    }
+
+    startButton.addEventListener("click", startTimer);
+    alertNowButton.addEventListener("click", () => completeNextAlert(true));
+    resetButton.addEventListener("click", resetTimer);
+
+    intervalInput.addEventListener("input", () => {
+      if (!running && !alarming) {
+        timerDisplay.textContent = formatTime(settings().intervalMs);
+      }
+    });
+
+    repeatInput.addEventListener("input", () => {
+      if (!running && !alarming) {
+        completedAlerts = 0;
+        updateProgress(settings());
+      }
+    });
+
+    volumeSlider.addEventListener("input", () => {
+      volumeValue.textContent = `${volumeSlider.value}%`;
+    });
+
+    muteButton.addEventListener("click", () => {
+      muted = !muted;
+      muteButton.textContent = muted ? "Unmute" : "Mute";
+      muteButton.classList.toggle("is-muted", muted);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const typing =
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLSelectElement ||
+        event.target instanceof HTMLTextAreaElement;
+
+      if (!typing && running && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        completeNextAlert(true);
+      }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && (running || alarming) && !wakeLock) {
+        requestWakeLock();
+      }
+    });
+
+    window.addEventListener("beforeunload", releaseWakeLock);
+
+    updateProgress(settings());
+  </script>
+</body>
+</html>
