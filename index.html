@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090a0d">
+    <meta
+      name="description"
+      content="A reliable, distraction-free interval timer with an optional secondary reminder."
+    >
+    <title>Interval Timer</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script defer src="js/storage.js"></script>
+    <script defer src="js/timer.js"></script>
+    <script defer src="js/audio.js"></script>
+    <script defer src="js/app.js"></script>
+  </head>
+  <body data-state="ready">
+    <div id="alertOverlay" class="alert-overlay" aria-hidden="true">
+      <div class="alert-overlay__surface"></div>
+      <div class="alert-overlay__label" id="alertOverlayLabel"></div>
+    </div>
+    <div id="secondaryAlertAccent" class="secondary-alert-accent" aria-hidden="true">
+      <span id="secondaryAlertAccentLabel">Item reminder</span>
+    </div>
+
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Focus utility</p>
+          <h1>Interval Timer</h1>
+        </div>
+
+        <div class="header-actions">
+          <div id="stateBadge" class="state-badge">
+            <span class="state-badge__dot" aria-hidden="true"></span>
+            <span id="stateText">Ready</span>
+          </div>
+          <button
+            id="settingsButton"
+            class="icon-button"
+            type="button"
+            aria-label="Open settings"
+            title="Settings"
+          >
+            <span aria-hidden="true">&#9881;</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="timer-card" aria-labelledby="timerLabel">
+        <p id="timerLabel" class="timer-label">Next alert in</p>
+        <div id="timer" class="countdown" role="timer" aria-label="1 minute 2 seconds remaining">
+          01:02
+        </div>
+
+        <div id="secondaryStatus" class="secondary-status" hidden>
+          <span class="secondary-status__dot" aria-hidden="true"></span>
+          <span>Item reminder</span>
+          <span aria-hidden="true">&middot;</span>
+          <span id="secondaryTime" class="secondary-status__time">01:30</span>
+        </div>
+
+        <div class="progress-summary">
+          <span id="progressText">0 of 29 alerts</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div
+          id="progressTrack"
+          class="progress-track"
+          role="progressbar"
+          aria-label="Session progress"
+          aria-valuemin="0"
+          aria-valuemax="29"
+          aria-valuenow="0"
+          aria-valuetext="0 of 29 alerts"
+        >
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+
+        <p id="statusMessage" class="status-message">Ready when you are.</p>
+      </section>
+
+      <div class="timer-actions">
+        <button id="startButton" class="button button--primary" type="button">Start</button>
+        <button
+          id="alertNowButton"
+          class="button button--alert"
+          type="button"
+          title="Trigger an alert now (F)"
+          aria-keyshortcuts="F"
+          disabled
+        >
+          Alert Now <kbd>F</kbd>
+        </button>
+        <button id="resetButton" class="button button--quiet" type="button">Reset</button>
+      </div>
+
+      <p class="local-note">Preferences stay on this device. Active sessions do not.</p>
+    </main>
+
+    <dialog
+      id="settingsDialog"
+      class="settings-dialog"
+      aria-labelledby="settingsTitle"
+      aria-modal="true"
+    >
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Preferences</p>
+          <h2 id="settingsTitle">Settings</h2>
+        </div>
+        <button
+          id="closeSettingsButton"
+          class="icon-button"
+          type="button"
+          aria-label="Close settings"
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
+      <div class="dialog-body">
+        <section class="settings-section" aria-labelledby="mainSettingsTitle">
+          <div class="settings-section__heading">
+            <div>
+              <h3 id="mainSettingsTitle">Main timer</h3>
+              <p>The alert schedule for each session.</p>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Interval</span>
+              <span class="input-with-unit">
+                <input
+                  id="mainIntervalInput"
+                  data-session-locked
+                  type="number"
+                  min="0.1"
+                  max="86400"
+                  step="0.1"
+                  inputmode="decimal"
+                >
+                <span>sec</span>
+              </span>
+            </label>
+
+            <label class="field">
+              <span>Number of alerts</span>
+              <input
+                id="totalAlertsInput"
+                data-session-locked
+                type="number"
+                min="1"
+                max="9999"
+                step="1"
+                inputmode="numeric"
+              >
+            </label>
+
+            <label class="field">
+              <span>Main alert duration</span>
+              <span class="input-with-unit">
+                <input
+                  id="mainAlertDurationInput"
+                  type="number"
+                  min="0.5"
+                  max="15"
+                  step="0.1"
+                  inputmode="decimal"
+                >
+                <span>sec</span>
+              </span>
+            </label>
+
+            <div class="field">
+              <label for="mainSoundSelect">Main sound</label>
+              <span class="select-with-action">
+                <select id="mainSoundSelect">
+                  <option value="glass-ping">Glass Ping</option>
+                  <option value="bright-bell">Bright Bell</option>
+                  <option value="soft-chime">Soft Chime</option>
+                </select>
+                <button
+                  id="previewMainSoundButton"
+                  class="mini-button"
+                  type="button"
+                  aria-label="Test main sound"
+                >
+                  Test
+                </button>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="soundSettingsTitle">
+          <div class="settings-section__heading settings-section__heading--inline">
+            <div>
+              <h3 id="soundSettingsTitle">Sound</h3>
+              <p>One sound control applies to all notifications.</p>
+            </div>
+            <label class="switch-control">
+              <span class="visually-hidden">Sound enabled</span>
+              <input id="soundEnabledInput" type="checkbox">
+              <span class="switch" aria-hidden="true"></span>
+              <span id="soundEnabledLabel">On</span>
+            </label>
+          </div>
+
+          <div class="field field--range">
+            <label for="volumeInput">Volume</label>
+            <span class="range-control">
+              <input id="volumeInput" type="range" min="0" max="100" step="1">
+              <output id="volumeValue" for="volumeInput">100%</output>
+            </span>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="secondarySettingsTitle">
+          <div class="settings-section__heading settings-section__heading--inline">
+            <div>
+              <h3 id="secondarySettingsTitle">Item reminder</h3>
+              <p>An independent reminder that does not change main progress.</p>
+            </div>
+            <label class="switch-control">
+              <span class="visually-hidden">Item reminder enabled</span>
+              <input id="secondaryEnabledInput" data-session-locked type="checkbox">
+              <span class="switch switch--amber" aria-hidden="true"></span>
+              <span id="secondaryEnabledLabel">Off</span>
+            </label>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Reminder interval</span>
+              <span class="input-with-unit">
+                <input
+                  id="secondaryIntervalInput"
+                  data-session-locked
+                  type="number"
+                  min="0.1"
+                  max="86400"
+                  step="0.1"
+                  inputmode="decimal"
+                >
+                <span>sec</span>
+              </span>
+            </label>
+
+            <div class="field">
+              <label for="secondarySoundSelect">Reminder sound</label>
+              <span class="select-with-action">
+                <select id="secondarySoundSelect">
+                  <option value="double-tap">Low Double Tap</option>
+                  <option value="signal-drop">Signal Drop</option>
+                  <option value="wood-block">Wood Block</option>
+                </select>
+                <button
+                  id="previewSecondarySoundButton"
+                  class="mini-button"
+                  type="button"
+                  aria-label="Test item reminder sound"
+                >
+                  Test
+                </button>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <p id="settingsHint" class="settings-hint">
+          Changes save automatically. Timing controls lock during a session.
+        </p>
+        <p
+          id="settingsFeedback"
+          class="settings-feedback"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        ></p>
+      </div>
+
+      <div class="dialog-footer">
+        <button id="restoreDefaultsButton" class="button button--quiet" type="button">
+          Restore defaults
+        </button>
+        <button id="doneSettingsButton" class="button button--primary" type="button">Done</button>
+      </div>
+    </dialog>
+
+    <div
+      id="liveAnnouncements"
+      class="visually-hidden"
+      aria-live="assertive"
+      aria-atomic="true"
+    ></div>
+
+    <noscript>
+      <p class="noscript-message">This timer needs JavaScript enabled to run.</p>
+    </noscript>
+  </body>
+</html>
