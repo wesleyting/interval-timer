@@ -1,6 +1,6 @@
 # Interval Timer
 
-A lightweight interval timer for repeated main alerts, with an optional independent item reminder. It is a static web app: there is no framework, package install, build step, or server requirement.
+A lightweight interval timer for repeated main alerts, with multiple named independent reminders (up to 50). It is a static web app: there is no framework, package install, build step, or server requirement.
 
 ## Use it
 
@@ -11,6 +11,10 @@ A lightweight interval timer for repeated main alerts, with an optional independ
 
 Use **Settings** to change preferences. Changes save automatically in `localStorage`; an active session is intentionally never restored after a refresh or reopening the page.
 
+Main and reminder intervals use separate minute and second fields. While a session is running, the main schedule stays locked, but reminders remain live: you can add, remove, enable, disable, rename, or retime them. Adding, enabling, or retiming a reminder starts a full interval for that reminder from the moment of the change without moving the main deadline or any other reminder.
+
+Clicking into a number selects its current value so the next number you type replaces it. Leaving an edited number blank restores its last saved value. Settings close only with **Done**, the close button, or <kbd>Esc</kbd>; dragging outside the dialog does not dismiss it.
+
 The scheduler uses monotonic timestamps instead of decrementing a counter. If a browser delays a callback in the background, the app emits at most one overdue notification and starts a full new interval from the time that notification is delivered. It does not replay a missed-alert backlog.
 
 ## Defaults
@@ -20,7 +24,7 @@ The scheduler uses monotonic timestamps instead of decrementing a counter. If a 
 - Main sound: Glass Ping
 - Main visual alert: 3 seconds of continuous red
 - Sound: on at 100% volume
-- Item reminder: off (90 seconds when enabled)
+- One Item reminder: off (1 minute 30 seconds when enabled)
 - Completion: one ascending chime and completion visual, then silence
 
 ## Files

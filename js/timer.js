@@ -11,6 +11,10 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createTimerApi() {
   "use strict";
 
+  const DEFAULT_MAIN_INTERVAL_MS = 62000;
+  const DEFAULT_TOTAL_ALERTS = 29;
+  const DEFAULT_REMINDER_INTERVAL_MS = 90000;
+
   function defaultNow() {
     if (typeof performance !== "undefined" && typeof performance.now === "function") {
       return performance.now();
@@ -29,15 +33,88 @@
     return Number.isFinite(number) && number >= 1 ? Math.floor(number) : fallback;
   }
 
+  function uniqueReminderId(value, index, usedIds) {
+    const supplied = typeof value === "string" ? value.trim().slice(0, 64) : "";
+    const base = supplied || `reminder-${index + 1}`;
+    let id = base;
+    let suffix = 2;
+
+    while (usedIds.has(id)) {
+      const suffixText = `-${suffix}`;
+      id = `${base.slice(0, Math.max(1, 64 - suffixText.length))}${suffixText}`;
+      suffix += 1;
+    }
+
+    usedIds.add(id);
+    return id;
+  }
+
+  function normalizeReminderDefinitions(value) {
+    if (!Array.isArray(value)) return Object.freeze([]);
+
+    const usedIds = new Set();
+    const reminders = value.map((entry, index) => {
+      const source = entry && typeof entry === "object" ? entry : {};
+
+      return Object.freeze({
+        id: uniqueReminderId(source.id, index, usedIds),
+        enabled: typeof source.enabled === "boolean" ? source.enabled : false,
+        intervalMs: positiveMilliseconds(
+          source.intervalMs,
+          DEFAULT_REMINDER_INTERVAL_MS
+        )
+      });
+    });
+
+    return Object.freeze(reminders);
+  }
+
+  function remindersFromConfig(source) {
+    if (Array.isArray(source.reminders)) {
+      return normalizeReminderDefinitions(source.reminders);
+    }
+
+    // Keep accepting the original single-reminder configuration while callers move
+    // to the reminders array. A config with no legacy fields has no reminders.
+    if (
+      Object.prototype.hasOwnProperty.call(source, "secondaryEnabled") ||
+      Object.prototype.hasOwnProperty.call(source, "secondaryIntervalMs")
+    ) {
+      return normalizeReminderDefinitions([
+        {
+          id: "item-reminder",
+          enabled: Boolean(source.secondaryEnabled),
+          intervalMs: source.secondaryIntervalMs
+        }
+      ]);
+    }
+
+    return Object.freeze([]);
+  }
+
+  function freezeConfig(mainIntervalMs, totalAlerts, reminders) {
+    const firstReminder = reminders[0] || null;
+
+    return Object.freeze({
+      mainIntervalMs,
+      totalAlerts,
+      reminders,
+      // Read-only aliases keep the former config shape usable during migration.
+      secondaryEnabled: Boolean(firstReminder && firstReminder.enabled),
+      secondaryIntervalMs: firstReminder
+        ? firstReminder.intervalMs
+        : DEFAULT_REMINDER_INTERVAL_MS
+    });
+  }
+
   function normalizeConfig(config) {
     const source = config && typeof config === "object" ? config : {};
 
-    return Object.freeze({
-      mainIntervalMs: positiveMilliseconds(source.mainIntervalMs, 62000),
-      totalAlerts: positiveInteger(source.totalAlerts, 29),
-      secondaryEnabled: Boolean(source.secondaryEnabled),
-      secondaryIntervalMs: positiveMilliseconds(source.secondaryIntervalMs, 90000)
-    });
+    return freezeConfig(
+      positiveMilliseconds(source.mainIntervalMs, DEFAULT_MAIN_INTERVAL_MS),
+      positiveInteger(source.totalAlerts, DEFAULT_TOTAL_ALERTS),
+      remindersFromConfig(source)
+    );
   }
 
   class TimerEngine {
@@ -53,8 +130,8 @@
       this.config = null;
       this.completedMain = 0;
       this.mainNextAt = null;
-      this.secondaryNextAt = null;
-      this.secondarySequence = 0;
+      this.reminders = new Map();
+      this.reminderEventSequence = 0;
       this.lastObservedAt = null;
       return this.getSnapshot();
     }
@@ -66,11 +143,61 @@
       this.startedAt = now;
       this.config = normalizeConfig(config);
       this.completedMain = 0;
-      this.secondarySequence = 0;
+      this.reminderEventSequence = 0;
       this.mainNextAt = now + this.config.mainIntervalMs;
-      this.secondaryNextAt = this.config.secondaryEnabled
-        ? now + this.config.secondaryIntervalMs
-        : null;
+      this.reminders = new Map(
+        this.config.reminders.map((reminder) => [
+          reminder.id,
+          {
+            id: reminder.id,
+            enabled: reminder.enabled,
+            intervalMs: reminder.intervalMs,
+            nextAt: reminder.enabled ? now + reminder.intervalMs : null,
+            sequence: 0
+          }
+        ])
+      );
+      return this.getSnapshot(now);
+    }
+
+    syncReminders(definitions, at = this.now()) {
+      const now = this._observe(at);
+
+      if (this.phase !== "running") {
+        return this.getSnapshot(now);
+      }
+
+      const normalized = normalizeReminderDefinitions(definitions);
+      const nextStates = new Map();
+
+      normalized.forEach((definition) => {
+        const previous = this.reminders.get(definition.id);
+        let nextAt = null;
+
+        if (definition.enabled) {
+          const scheduleIsUnchanged =
+            previous &&
+            previous.enabled &&
+            previous.intervalMs === definition.intervalMs &&
+            previous.nextAt !== null;
+          nextAt = scheduleIsUnchanged ? previous.nextAt : now + definition.intervalMs;
+        }
+
+        nextStates.set(definition.id, {
+          id: definition.id,
+          enabled: definition.enabled,
+          intervalMs: definition.intervalMs,
+          nextAt,
+          sequence: previous ? previous.sequence : 0
+        });
+      });
+
+      this.reminders = nextStates;
+      this.config = freezeConfig(
+        this.config.mainIntervalMs,
+        this.config.totalAlerts,
+        normalized
+      );
       return this.getSnapshot(now);
     }
 
@@ -87,36 +214,37 @@
         const mainEvent = this._consumeMain("scheduled", now, scheduledAt);
         events.push(mainEvent);
 
-        // Completion stops the independent reminder immediately. If both were overdue,
-        // the final completion cue wins and there is no stale secondary notification.
+        // Completion owns the notification moment and stops every independent
+        // reminder, including reminders due at the same timestamp.
         if (mainEvent.type === "completion") {
           return events;
         }
       }
 
-      if (
-        this.phase === "running" &&
-        this.secondaryNextAt !== null &&
-        now >= this.secondaryNextAt
-      ) {
-        const scheduledAt = this.secondaryNextAt;
-        this.secondarySequence += 1;
+      this.reminders.forEach((reminder) => {
+        if (!reminder.enabled || reminder.nextAt === null || now < reminder.nextAt) {
+          return;
+        }
 
-        const secondaryEvent = {
-          type: "secondary-alert",
-          id: `${this.sessionId}:secondary:${this.secondarySequence}`,
+        const scheduledAt = reminder.nextAt;
+        reminder.sequence += 1;
+        this.reminderEventSequence += 1;
+
+        events.push({
+          type: "reminder-alert",
+          id: `${this.sessionId}:reminder:${this.reminderEventSequence}`,
           sessionId: this.sessionId,
-          sequence: this.secondarySequence,
+          reminderId: reminder.id,
+          sequence: reminder.sequence,
           scheduledAt,
           firedAt: now,
           lateByMs: Math.max(0, now - scheduledAt)
-        };
+        });
 
-        // A delayed browser callback produces one notification, not a replay of every
-        // missed slot. Rebasing gives the user a full interval after the delivered cue.
-        this.secondaryNextAt = now + this.config.secondaryIntervalMs;
-        events.push(secondaryEvent);
-      }
+        // A delayed callback produces one notification per independent reminder,
+        // never a replay of every missed slot.
+        reminder.nextAt = now + reminder.intervalMs;
+      });
 
       return events;
     }
@@ -134,6 +262,17 @@
     getSnapshot(at = this.now()) {
       const now = this._observe(at);
       const totalAlerts = this.config ? this.config.totalAlerts : 0;
+      const reminders = Array.from(this.reminders.values(), (reminder) => ({
+        id: reminder.id,
+        enabled: reminder.enabled,
+        intervalMs: reminder.intervalMs,
+        nextAt: reminder.nextAt,
+        remainingMs:
+          this.phase === "running" && reminder.nextAt !== null
+            ? Math.max(0, reminder.nextAt - now)
+            : null
+      }));
+      const firstReminder = reminders[0] || null;
 
       return {
         phase: this.phase,
@@ -144,12 +283,11 @@
         mainNextAt: this.mainNextAt,
         mainRemainingMs:
           this.phase === "running" ? Math.max(0, this.mainNextAt - now) : null,
-        secondaryEnabled: Boolean(this.config && this.config.secondaryEnabled),
-        secondaryNextAt: this.secondaryNextAt,
-        secondaryRemainingMs:
-          this.phase === "running" && this.secondaryNextAt !== null
-            ? Math.max(0, this.secondaryNextAt - now)
-            : null
+        reminders,
+        // Snapshot aliases preserve the former single-reminder read API.
+        secondaryEnabled: Boolean(firstReminder && firstReminder.enabled),
+        secondaryNextAt: firstReminder ? firstReminder.nextAt : null,
+        secondaryRemainingMs: firstReminder ? firstReminder.remainingMs : null
       };
     }
 
@@ -158,9 +296,13 @@
         return null;
       }
 
-      return this.secondaryNextAt === null
-        ? this.mainNextAt
-        : Math.min(this.mainNextAt, this.secondaryNextAt);
+      let deadline = this.mainNextAt;
+      this.reminders.forEach((reminder) => {
+        if (reminder.nextAt !== null) {
+          deadline = Math.min(deadline, reminder.nextAt);
+        }
+      });
+      return deadline;
     }
 
     _consumeMain(source, now, scheduledAt) {
@@ -170,7 +312,9 @@
         this.phase = "complete";
         this.completedMain = this.config.totalAlerts;
         this.mainNextAt = null;
-        this.secondaryNextAt = null;
+        this.reminders.forEach((reminder) => {
+          reminder.nextAt = null;
+        });
 
         return {
           type: "completion",
@@ -186,7 +330,6 @@
       }
 
       // Both manual alerts and delayed scheduled alerts start a complete new interval.
-      // This removes the legacy short-countdown behavior after background throttling.
       this.mainNextAt = now + this.config.mainIntervalMs;
 
       return {
@@ -220,6 +363,7 @@
 
   return {
     TimerEngine,
-    normalizeTimerConfig: normalizeConfig
+    normalizeTimerConfig: normalizeConfig,
+    normalizeReminderDefinitions
   };
 });

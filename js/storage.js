@@ -11,7 +11,19 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createStorageApi() {
   "use strict";
 
-  const STORAGE_KEY = "interval-timer.preferences.v1";
+  const STORAGE_KEY = "interval-timer.preferences.v2";
+  const LEGACY_STORAGE_KEY = "interval-timer.preferences.v1";
+  const MAX_REMINDERS = 50;
+
+  const DEFAULT_REMINDERS = Object.freeze([
+    Object.freeze({
+      id: "item-reminder",
+      label: "Item reminder",
+      enabled: false,
+      intervalSeconds: 90,
+      sound: "double-tap"
+    })
+  ]);
 
   const DEFAULT_PREFERENCES = Object.freeze({
     mainIntervalSeconds: 62,
@@ -20,15 +32,21 @@
     mainAlertDurationSeconds: 3,
     soundEnabled: true,
     volume: 100,
-    secondaryEnabled: false,
-    secondaryIntervalSeconds: 90,
-    secondarySound: "double-tap"
+    reminders: DEFAULT_REMINDERS
   });
 
   const MAIN_SOUNDS = new Set(["glass-ping", "bright-bell", "soft-chime"]);
-  const SECONDARY_SOUNDS = new Set(["double-tap", "signal-drop", "wood-block"]);
+  const REMINDER_SOUNDS = new Set(["double-tap", "signal-drop", "wood-block"]);
 
   function finiteNumber(value, fallback) {
+    if (
+      value === null ||
+      typeof value === "boolean" ||
+      (typeof value === "string" && value.trim() === "")
+    ) {
+      return fallback;
+    }
+
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
   }
@@ -40,6 +58,87 @@
   function round(value, places) {
     const factor = 10 ** places;
     return Math.round(value * factor) / factor;
+  }
+
+  function cleanLabel(value, fallback) {
+    if (typeof value !== "string") return fallback;
+    const label = value.trim().replace(/\s+/g, " ").slice(0, 60);
+    return label || fallback;
+  }
+
+  function cleanId(value, index, usedIds) {
+    const raw = typeof value === "string" ? value.trim() : "";
+    const cleaned = raw
+      .replace(/[^A-Za-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64);
+    const base = cleaned || `reminder-${index + 1}`;
+    let id = base;
+    let suffix = 2;
+
+    while (usedIds.has(id)) {
+      const suffixText = `-${suffix}`;
+      id = `${base.slice(0, Math.max(1, 64 - suffixText.length))}${suffixText}`;
+      suffix += 1;
+    }
+
+    usedIds.add(id);
+    return id;
+  }
+
+  function legacyReminderSource(source) {
+    const hasLegacyReminder =
+      Object.prototype.hasOwnProperty.call(source, "secondaryEnabled") ||
+      Object.prototype.hasOwnProperty.call(source, "secondaryIntervalSeconds") ||
+      Object.prototype.hasOwnProperty.call(source, "secondarySound");
+
+    if (!hasLegacyReminder) return null;
+
+    return {
+      id: "item-reminder",
+      label: "Item reminder",
+      enabled:
+        typeof source.secondaryEnabled === "boolean"
+          ? source.secondaryEnabled
+          : DEFAULT_REMINDERS[0].enabled,
+      intervalSeconds: source.secondaryIntervalSeconds,
+      sound: source.secondarySound
+    };
+  }
+
+  function reminderSources(source) {
+    if (Array.isArray(source.reminders)) {
+      return source.reminders.slice(0, MAX_REMINDERS);
+    }
+
+    const legacy = legacyReminderSource(source);
+    return legacy ? [legacy] : DEFAULT_REMINDERS;
+  }
+
+  function sanitizeReminders(source) {
+    const usedIds = new Set();
+
+    return reminderSources(source).map((entry, index) => {
+      const reminder = entry && typeof entry === "object" ? entry : {};
+      const defaultLabel = `Reminder ${index + 1}`;
+
+      return {
+        id: cleanId(reminder.id, index, usedIds),
+        label: cleanLabel(reminder.label, defaultLabel),
+        enabled: typeof reminder.enabled === "boolean" ? reminder.enabled : false,
+        intervalSeconds: round(
+          clamp(
+            finiteNumber(reminder.intervalSeconds, DEFAULT_REMINDERS[0].intervalSeconds),
+            0.1,
+            86400
+          ),
+          1
+        ),
+        sound: REMINDER_SOUNDS.has(reminder.sound)
+          ? reminder.sound
+          : DEFAULT_REMINDERS[0].sound
+      };
+    });
   }
 
   function sanitizePreferences(value) {
@@ -75,26 +174,15 @@
         typeof source.soundEnabled === "boolean"
           ? source.soundEnabled
           : DEFAULT_PREFERENCES.soundEnabled,
-      volume: Math.round(clamp(finiteNumber(source.volume, DEFAULT_PREFERENCES.volume), 0, 100)),
-      secondaryEnabled:
-        typeof source.secondaryEnabled === "boolean"
-          ? source.secondaryEnabled
-          : DEFAULT_PREFERENCES.secondaryEnabled,
-      secondaryIntervalSeconds: round(
-        clamp(
-          finiteNumber(
-            source.secondaryIntervalSeconds,
-            DEFAULT_PREFERENCES.secondaryIntervalSeconds
-          ),
-          0.1,
-          86400
-        ),
-        1
+      volume: Math.round(
+        clamp(finiteNumber(source.volume, DEFAULT_PREFERENCES.volume), 0, 100)
       ),
-      secondarySound: SECONDARY_SOUNDS.has(source.secondarySound)
-        ? source.secondarySound
-        : DEFAULT_PREFERENCES.secondarySound
+      reminders: sanitizeReminders(source)
     };
+  }
+
+  function cloneDefaultPreferences() {
+    return sanitizePreferences(DEFAULT_PREFERENCES);
   }
 
   function getStorage() {
@@ -105,42 +193,60 @@
     }
   }
 
+  function readStoredObject(storage, key) {
+    try {
+      const saved = storage.getItem(key);
+      if (saved === null) return null;
+      const parsed = JSON.parse(saved);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeStoredPreferences(storage, preferences) {
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+    } catch (error) {
+      // Storage can be unavailable in privacy modes. The timer still works in memory.
+    }
+  }
+
   function loadPreferences(storage = getStorage()) {
     if (!storage) {
-      return { ...DEFAULT_PREFERENCES };
+      return cloneDefaultPreferences();
     }
 
-    try {
-      const saved = storage.getItem(STORAGE_KEY);
-      return saved ? sanitizePreferences(JSON.parse(saved)) : { ...DEFAULT_PREFERENCES };
-    } catch (error) {
-      return { ...DEFAULT_PREFERENCES };
+    const saved = readStoredObject(storage, STORAGE_KEY);
+    if (saved) {
+      return sanitizePreferences(saved);
     }
+
+    const legacy = readStoredObject(storage, LEGACY_STORAGE_KEY);
+    if (legacy) {
+      const migrated = sanitizePreferences(legacy);
+      writeStoredPreferences(storage, migrated);
+      return migrated;
+    }
+
+    return cloneDefaultPreferences();
   }
 
   function savePreferences(preferences, storage = getStorage()) {
     const sanitized = sanitizePreferences(preferences);
 
     if (storage) {
-      try {
-        storage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
-      } catch (error) {
-        // Storage can be unavailable in privacy modes. The timer still works in memory.
-      }
+      writeStoredPreferences(storage, sanitized);
     }
 
     return sanitized;
   }
 
   function restoreDefaultPreferences(storage = getStorage()) {
-    const defaults = { ...DEFAULT_PREFERENCES };
+    const defaults = cloneDefaultPreferences();
 
     if (storage) {
-      try {
-        storage.setItem(STORAGE_KEY, JSON.stringify(defaults));
-      } catch (error) {
-        // Keep the restored in-memory preferences even if persistence is unavailable.
-      }
+      writeStoredPreferences(storage, defaults);
     }
 
     return defaults;
@@ -148,6 +254,8 @@
 
   return {
     STORAGE_KEY,
+    LEGACY_STORAGE_KEY,
+    MAX_REMINDERS,
     DEFAULT_PREFERENCES,
     sanitizePreferences,
     loadPreferences,

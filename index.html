@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#090a0d">
     <meta
       name="description"
-      content="A reliable, distraction-free interval timer with an optional secondary reminder."
+      content="A reliable, distraction-free interval timer with independent reminders."
     >
     <title>Interval Timer</title>
     <link rel="stylesheet" href="css/styles.css">
@@ -51,15 +51,15 @@
       <section class="timer-card" aria-labelledby="timerLabel">
         <p id="timerLabel" class="timer-label">Next alert in</p>
         <div id="timer" class="countdown" role="timer" aria-label="1 minute 2 seconds remaining">
-          01:02
+          1:02
         </div>
 
-        <div id="secondaryStatus" class="secondary-status" hidden>
-          <span class="secondary-status__dot" aria-hidden="true"></span>
-          <span>Item reminder</span>
-          <span aria-hidden="true">&middot;</span>
-          <span id="secondaryTime" class="secondary-status__time">01:30</span>
-        </div>
+        <ul
+          id="reminderStatuses"
+          class="reminder-statuses"
+          aria-label="Active reminder countdowns"
+          hidden
+        ></ul>
 
         <div class="progress-summary">
           <span id="progressText">0 of 29 alerts</span>
@@ -130,31 +130,45 @@
           </div>
 
           <div class="field-grid">
-            <label class="field">
-              <span>Interval</span>
-              <span class="input-with-unit">
-                <input
-                  id="mainIntervalInput"
-                  data-session-locked
-                  type="number"
-                  min="0.1"
-                  max="86400"
-                  step="0.1"
-                  inputmode="decimal"
-                >
-                <span>sec</span>
-              </span>
-            </label>
+            <fieldset class="field duration-field">
+              <legend>Interval</legend>
+              <div class="duration-inputs">
+                <label class="duration-part">
+                  <span class="visually-hidden">Main interval minutes</span>
+                  <span class="input-with-unit">
+                    <input
+                      id="mainIntervalMinutesInput"
+                      data-session-locked
+                      type="text"
+                      pattern="[0-9]*"
+                      inputmode="numeric"
+                    >
+                    <span aria-hidden="true">min</span>
+                  </span>
+                </label>
+                <label class="duration-part">
+                  <span class="visually-hidden">Main interval seconds</span>
+                  <span class="input-with-unit">
+                    <input
+                      id="mainIntervalSecondsInput"
+                      data-session-locked
+                      type="text"
+                      pattern="[0-9]*([.][0-9]+)?"
+                      inputmode="decimal"
+                    >
+                    <span aria-hidden="true">sec</span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
 
             <label class="field">
               <span>Number of alerts</span>
               <input
                 id="totalAlertsInput"
                 data-session-locked
-                type="number"
-                min="1"
-                max="9999"
-                step="1"
+                type="text"
+                pattern="[0-9]*"
                 inputmode="numeric"
               >
             </label>
@@ -164,10 +178,8 @@
               <span class="input-with-unit">
                 <input
                   id="mainAlertDurationInput"
-                  type="number"
-                  min="0.5"
-                  max="15"
-                  step="0.1"
+                  type="text"
+                  pattern="[0-9]*([.][0-9]+)?"
                   inputmode="decimal"
                 >
                 <span>sec</span>
@@ -218,60 +230,42 @@
           </div>
         </section>
 
-        <section class="settings-section" aria-labelledby="secondarySettingsTitle">
-          <div class="settings-section__heading settings-section__heading--inline">
+        <section
+          class="settings-section"
+          aria-labelledby="reminderSettingsTitle"
+          aria-describedby="remindersDescription"
+        >
+          <div class="settings-section__heading settings-section__heading--reminders">
             <div>
-              <h3 id="secondarySettingsTitle">Item reminder</h3>
-              <p>An independent reminder that does not change main progress.</p>
+              <h3 id="reminderSettingsTitle">Reminders</h3>
+              <p id="remindersDescription">
+                Repeat independently while the main session runs. Live changes affect only
+                the reminder you edit.
+              </p>
             </div>
-            <label class="switch-control">
-              <span class="visually-hidden">Item reminder enabled</span>
-              <input id="secondaryEnabledInput" data-session-locked type="checkbox">
-              <span class="switch switch--amber" aria-hidden="true"></span>
-              <span id="secondaryEnabledLabel">Off</span>
-            </label>
+            <button
+              id="addReminderButton"
+              class="mini-button reminder-add-button"
+              type="button"
+              aria-describedby="remindersDescription"
+            >
+              Add reminder
+            </button>
           </div>
 
-          <div class="field-grid">
-            <label class="field">
-              <span>Reminder interval</span>
-              <span class="input-with-unit">
-                <input
-                  id="secondaryIntervalInput"
-                  data-session-locked
-                  type="number"
-                  min="0.1"
-                  max="86400"
-                  step="0.1"
-                  inputmode="decimal"
-                >
-                <span>sec</span>
-              </span>
-            </label>
-
-            <div class="field">
-              <label for="secondarySoundSelect">Reminder sound</label>
-              <span class="select-with-action">
-                <select id="secondarySoundSelect">
-                  <option value="double-tap">Low Double Tap</option>
-                  <option value="signal-drop">Signal Drop</option>
-                  <option value="wood-block">Wood Block</option>
-                </select>
-                <button
-                  id="previewSecondarySoundButton"
-                  class="mini-button"
-                  type="button"
-                  aria-label="Test item reminder sound"
-                >
-                  Test
-                </button>
-              </span>
-            </div>
-          </div>
+          <ul
+            id="remindersList"
+            class="reminder-settings-list"
+            aria-label="Configured reminders"
+          ></ul>
+          <p id="remindersEmpty" class="reminders-empty">
+            No reminders yet. Add one whenever you need another independent countdown.
+          </p>
         </section>
 
         <p id="settingsHint" class="settings-hint">
-          Changes save automatically. Timing controls lock during a session.
+          Changes save automatically. Main session timing locks while running; reminders stay
+          editable.
         </p>
         <p
           id="settingsFeedback"
@@ -289,6 +283,94 @@
         <button id="doneSettingsButton" class="button button--primary" type="button">Done</button>
       </div>
     </dialog>
+
+    <template id="reminderSettingsTemplate">
+      <li class="reminder-settings-item" data-role="card">
+        <fieldset class="reminder-card">
+          <legend class="visually-hidden" data-role="title">Reminder settings</legend>
+
+          <div class="reminder-card__header">
+            <label class="field reminder-name-field">
+              <span>Reminder name</span>
+              <input
+                data-role="label"
+                type="text"
+                maxlength="40"
+                autocomplete="off"
+                spellcheck="false"
+              >
+            </label>
+
+            <div class="reminder-card__actions">
+              <label class="switch-control">
+                <span class="visually-hidden">Reminder enabled</span>
+                <input data-role="enabled" type="checkbox">
+                <span class="switch switch--amber" aria-hidden="true"></span>
+                <span data-role="enabled-label">On</span>
+              </label>
+              <button
+                class="mini-button reminder-remove-button"
+                data-role="remove"
+                type="button"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+
+          <div class="reminder-card__fields">
+            <fieldset class="field duration-field">
+              <legend>Interval</legend>
+              <div class="duration-inputs">
+                <label class="duration-part">
+                  <span class="visually-hidden">Reminder interval minutes</span>
+                  <span class="input-with-unit">
+                    <input
+                      data-role="minutes"
+                      type="text"
+                      pattern="[0-9]*"
+                      inputmode="numeric"
+                    >
+                    <span aria-hidden="true">min</span>
+                  </span>
+                </label>
+                <label class="duration-part">
+                  <span class="visually-hidden">Reminder interval seconds</span>
+                  <span class="input-with-unit">
+                    <input
+                      data-role="seconds"
+                      type="text"
+                      pattern="[0-9]*([.][0-9]+)?"
+                      inputmode="decimal"
+                    >
+                    <span aria-hidden="true">sec</span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="field">
+              <span>Reminder sound</span>
+              <span class="select-with-action">
+                <select data-role="sound" aria-label="Reminder sound">
+                  <option value="double-tap">Low Double Tap</option>
+                  <option value="signal-drop">Signal Drop</option>
+                  <option value="wood-block">Wood Block</option>
+                </select>
+                <button
+                  class="mini-button"
+                  data-role="test"
+                  type="button"
+                  aria-label="Test reminder sound"
+                >
+                  Test
+                </button>
+              </span>
+            </div>
+          </div>
+        </fieldset>
+      </li>
+    </template>
 
     <div
       id="liveAnnouncements"
