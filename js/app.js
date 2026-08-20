@@ -32,8 +32,19 @@
     timersEmpty: document.getElementById("timersEmpty"),
     timerCardTemplate: document.getElementById("timerCardTemplate"),
     addTimerButton: document.getElementById("addTimerButton"),
+    timerHud: document.getElementById("timerHud"),
+    hudDragHandle: document.getElementById("hudDragHandle"),
+    hudDefaultSize: document.getElementById("hudDefaultSize"),
+    hudShowStopped: document.getElementById("hudShowStopped"),
+    hudStoppedLabel: document.getElementById("hudStoppedLabel"),
+    hudTimerList: document.getElementById("hudTimerList"),
+    hudEmpty: document.getElementById("hudEmpty"),
     alertTray: document.getElementById("alertTray"),
     alertTrayMessage: document.getElementById("alertTrayMessage"),
+    hudAlertKicker: document.getElementById("hudAlertKicker"),
+    hudAlertTitle: document.getElementById("hudAlertTitle"),
+    hudAlertDismiss: document.getElementById("hudAlertDismiss"),
+    hudAlertReset: document.getElementById("hudAlertReset"),
     soundEnabledInput: document.getElementById("soundEnabledInput"),
     soundEnabledLabel: document.getElementById("soundEnabledLabel"),
     volumeInput: document.getElementById("volumeInput"),
@@ -49,9 +60,10 @@
     : ["red", "amber", "cyan", "blue", "violet", "green", "pink"];
   const timerLimit = Number.isFinite(MAX_TIMERS) ? MAX_TIMERS : 64;
   const mainSounds = new Set(["glass-ping", "bright-bell", "soft-chime"]);
+  const HUD_STATE_KEY = "interval-timer.hud-position.v1";
 
   const now = () => performance.now();
-  let preferences = loadPreferences();
+  let preferences = ensureTimersAvailable(loadPreferences());
   const engine = new TimerEngine({ now });
   const audio = new AudioManager({ onUnavailable: reportAudioUnavailable });
 
@@ -70,22 +82,35 @@
   let visualSequence = 0;
   let audioWarningShown = false;
   let timerIdSequence = 0;
+  let hudRenderedTimerCount = -1;
+  let hudShowStopped = false;
 
   const cardNodes = new Map();
+  const hudRows = new Map();
   const cardMessages = new Map();
   const openSettings = new Set();
   const visualAlertHandles = new Map();
+  const pageAlertHandles = new Map();
   const activeVisualOrder = new Map();
   const completionOrder = new Map();
+  const completionNotices = new Map();
   let trayEvents = [];
 
   function timerDefinitions() {
     return preferences.timers.map((timer) => ({
       id: timer.id,
-      enabled: timer.enabled,
+      enabled: true,
       intervalMs: timer.intervalSeconds * 1000,
       alertLimit: timer.alertMode === "finite" ? timer.alertCount : null
     }));
+  }
+
+  function ensureTimersAvailable(source) {
+    if (!source.timers.some((timer) => !timer.enabled)) return source;
+    return savePreferences({
+      ...source,
+      timers: source.timers.map((timer) => ({ ...timer, enabled: true }))
+    });
   }
 
   function preferenceTimer(timerId) {
@@ -205,8 +230,6 @@
       "title",
       "color-dot",
       "state",
-      "enabled",
-      "enabled-label",
       "settings-toggle",
       "countdown-label",
       "countdown",
@@ -219,6 +242,8 @@
       "alert-now",
       "reset",
       "settings-panel",
+      "settings-close",
+      "settings-done",
       "name",
       "minutes",
       "seconds",
@@ -246,12 +271,14 @@
 
     nodes.title.id = titleId;
     nodes.title.textContent = timer.label;
+    nodes.shell.tabIndex = -1;
     nodes.shell.setAttribute("aria-labelledby", titleId);
     nodes["settings-panel"].id = settingsId;
     nodes["settings-panel"].setAttribute("aria-label", `${timer.label} settings`);
+    nodes["settings-close"].setAttribute("aria-label", `Close ${timer.label} settings`);
+    nodes["settings-done"].setAttribute("aria-label", `Done editing ${timer.label}`);
     nodes["settings-toggle"].setAttribute("aria-controls", settingsId);
     nodes["settings-toggle"].setAttribute("aria-label", `Settings for ${timer.label}`);
-    nodes.enabled.setAttribute("aria-label", `Enable ${timer.label}`);
     nodes.countdown.setAttribute("aria-label", `${timer.label} interval`);
     nodes["progress-track"].setAttribute("aria-label", `${timer.label} progress`);
     nodes.start.setAttribute("aria-label", `Start ${timer.label}`);
@@ -296,13 +323,33 @@
   function setSettingsOpen(timerId, shouldOpen, focusName = false) {
     const nodes = cardNodes.get(timerId);
     if (!nodes) return;
+    const dialog = nodes["settings-panel"];
 
-    if (shouldOpen) openSettings.add(timerId);
-    else openSettings.delete(timerId);
-    nodes["settings-panel"].hidden = !shouldOpen;
+    if (shouldOpen) {
+      [...openSettings].forEach((openTimerId) => {
+        if (openTimerId !== timerId) setSettingsOpen(openTimerId, false);
+      });
+      openSettings.add(timerId);
+      if (!dialog.open) dialog.showModal();
+    } else {
+      openSettings.delete(timerId);
+      if (dialog.open) dialog.close();
+    }
     nodes["settings-toggle"].setAttribute("aria-expanded", String(shouldOpen));
+    const timer = preferenceTimer(timerId);
+    if (timer) {
+      nodes["settings-toggle"].setAttribute(
+        "aria-label",
+        `${shouldOpen ? "Close" : "Open"} settings for ${timer.label}`
+      );
+    }
 
-    if (shouldOpen && focusName) nodes.name.focus();
+    if (shouldOpen && focusName) {
+      window.requestAnimationFrame(() => {
+        nodes.name.focus();
+        nodes.name.select();
+      });
+    }
   }
 
   function configureCard(card, timer) {
@@ -311,7 +358,7 @@
     cardNodes.set(timer.id, nodes);
     applyCardIdentity(nodes, timer);
     applyTimerFormValues(nodes, timer);
-    setSettingsOpen(timer.id, openSettings.has(timer.id));
+    nodes["settings-toggle"].setAttribute("aria-expanded", "false");
 
     enhanceNumberInput(
       nodes.minutes,
@@ -344,9 +391,52 @@
       { min: 0.5, max: 15, step: 0.1 }
     );
 
-    nodes.enabled.addEventListener("change", () => toggleTimerEnabled(timer.id));
     nodes["settings-toggle"].addEventListener("click", () => {
       setSettingsOpen(timer.id, !openSettings.has(timer.id));
+    });
+    const closeSettings = () => {
+      setSettingsOpen(timer.id, false);
+      nodes["settings-toggle"].focus();
+    };
+    nodes["settings-close"].addEventListener("click", closeSettings);
+    nodes["settings-done"].addEventListener("click", closeSettings);
+    nodes["settings-panel"].addEventListener("close", () => {
+      openSettings.delete(timer.id);
+      nodes["settings-toggle"].setAttribute("aria-expanded", "false");
+      const current = preferenceTimer(timer.id);
+      if (current) {
+        nodes["settings-toggle"].setAttribute(
+          "aria-label",
+          `Open settings for ${current.label}`
+        );
+      }
+    });
+    let backdropPointerId = null;
+    const isOutsideDialog = (event) => {
+      const rect = nodes["settings-panel"].getBoundingClientRect();
+      return (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      );
+    };
+    nodes["settings-panel"].addEventListener("pointerdown", (event) => {
+      backdropPointerId =
+        event.target === nodes["settings-panel"] && isOutsideDialog(event)
+          ? event.pointerId
+          : null;
+    });
+    nodes["settings-panel"].addEventListener("pointerup", (event) => {
+      const shouldClose =
+        backdropPointerId === event.pointerId &&
+        event.target === nodes["settings-panel"] &&
+        isOutsideDialog(event);
+      backdropPointerId = null;
+      if (shouldClose) closeSettings();
+    });
+    nodes["settings-panel"].addEventListener("pointercancel", () => {
+      backdropPointerId = null;
     });
     nodes.start.addEventListener("click", () => startTimer(timer.id));
     nodes["alert-now"].addEventListener("click", () => alertNow(timer.id));
@@ -381,6 +471,7 @@
 
     cardNodes.forEach((nodes, timerId) => {
       if (activeIds.has(timerId)) return;
+      if (nodes["settings-panel"].open) nodes["settings-panel"].close();
       nodes.card.remove();
       cardNodes.delete(timerId);
     });
@@ -395,10 +486,9 @@
   }
 
   function defaultCardMessage(timer, runtime) {
-    if (!timer.enabled) return "Disabled. Enable this timer when you need it.";
     if (runtime.phase === "running") return "Counting independently.";
     if (runtime.phase === "complete") return "Complete. Reset this timer to clear it.";
-    return "Ready when you are.";
+    return "Stopped.";
   }
 
   function renderCard(timer, runtime) {
@@ -416,7 +506,6 @@
 
     nodes.card.dataset.state = state;
     nodes.card.dataset.color = timer.alertColor;
-    nodes.card.dataset.enabled = String(timer.enabled);
     nodes.card.dataset.holdCompletion = String(
       isComplete && timer.persistCompletionBackground
     );
@@ -427,17 +516,11 @@
     );
     nodes.title.textContent = timer.label;
     nodes.state.textContent =
-      !timer.enabled
-        ? "Disabled"
-        : state === "running"
+      state === "running"
         ? "Running"
         : state === "complete"
           ? "Complete"
-          : state === "disabled"
-            ? "Disabled"
-            : "Ready";
-    nodes.enabled.checked = timer.enabled;
-    nodes["enabled-label"].textContent = timer.enabled ? "Enabled" : "Disabled";
+          : "Stopped";
     nodes["countdown-label"].textContent = isComplete
       ? "Timer complete"
       : isRunning
@@ -468,8 +551,8 @@
     }
 
     nodes.status.textContent = cardMessages.get(timer.id) || defaultCardMessage(timer, runtime);
-    nodes.start.disabled = !timer.enabled || runtime.phase !== "idle";
-    nodes["alert-now"].disabled = !timer.enabled || runtime.phase !== "running";
+    nodes.start.disabled = runtime.phase !== "idle";
+    nodes["alert-now"].disabled = runtime.phase !== "running";
     nodes.reset.disabled = runtime.phase === "idle";
     nodes["repeat-mode"].disabled = false;
     nodes["total-alerts"].disabled = timer.alertMode !== "finite";
@@ -484,11 +567,277 @@
     );
   }
 
+  function createHudRow(timerId) {
+    const item = document.createElement("li");
+    item.className = "timer-hud__item";
+
+    const button = document.createElement("button");
+    button.className = "timer-hud__timer";
+    button.type = "button";
+
+    const identity = document.createElement("span");
+    identity.className = "timer-hud__identity";
+    const dot = document.createElement("span");
+    dot.className = "timer-hud__dot";
+    dot.setAttribute("aria-hidden", "true");
+    const copy = document.createElement("span");
+    copy.className = "timer-hud__copy";
+    const name = document.createElement("strong");
+    const state = document.createElement("small");
+    copy.append(name, state);
+    identity.append(dot, copy);
+
+    const time = document.createElement("span");
+    time.className = "timer-hud__time";
+    const action = document.createElement("span");
+    action.className = "timer-hud__action";
+    action.textContent = "Alert now";
+    button.append(identity, time, action);
+    item.append(button);
+    button.addEventListener("click", () => {
+      const runtime = runtimeTimer(timerId);
+      if (runtime?.phase === "running") {
+        alertNow(timerId);
+        return;
+      }
+      if (runtime?.phase === "complete") {
+        resetTimer(timerId);
+        return;
+      }
+      startTimer(timerId);
+    });
+
+    const hudRow = { item, button, name, state, time, action };
+    hudRows.set(timerId, hudRow);
+    return hudRow;
+  }
+
+  function renderHud(snapshot) {
+    const activeIds = new Set(preferences.timers.map((timer) => timer.id));
+
+    preferences.timers.forEach((timer, index) => {
+      const runtime = runtimeTimer(timer.id, snapshot);
+      if (!runtime) return;
+      let hudRow = hudRows.get(timer.id);
+      if (!hudRow) hudRow = createHudRow(timer.id);
+
+      const isRunning = runtime.phase === "running";
+      const display = runtime.phase === "complete"
+        ? "DONE"
+        : formatTime(isRunning ? runtime.remainingMs : timer.intervalSeconds * 1000);
+      const state = runtime.phase === "complete"
+          ? "Complete"
+          : isRunning
+            ? "Running"
+            : "Stopped";
+      const action = isRunning ? "Alert now" : runtime.phase === "complete" ? "Reset" : "Start";
+
+      hudRow.item.dataset.color = timer.alertColor;
+      hudRow.item.dataset.state = runtime.phase;
+      hudRow.item.hidden = !hudShowStopped && !isRunning;
+      hudRow.name.textContent = timer.label;
+      hudRow.state.textContent = state;
+      hudRow.time.textContent = display;
+      hudRow.action.textContent = action;
+      hudRow.button.setAttribute(
+        "aria-label",
+        isRunning
+          ? `Alert now for ${timer.label}. ${display} remaining.`
+          : runtime.phase === "complete"
+            ? `Reset ${timer.label}. Timer complete.`
+            : `Start ${timer.label}. Interval ${display}.`
+      );
+      hudRow.button.title =
+        isRunning
+          ? `Alert now for ${timer.label}`
+          : runtime.phase === "complete"
+            ? `Reset ${timer.label}`
+            : `Start ${timer.label}`;
+      const currentAtIndex = elements.hudTimerList.children[index];
+      if (currentAtIndex !== hudRow.item) {
+        elements.hudTimerList.insertBefore(hudRow.item, currentAtIndex || null);
+      }
+    });
+
+    hudRows.forEach((hudRow, timerId) => {
+      if (activeIds.has(timerId)) return;
+      hudRow.item.remove();
+      hudRows.delete(timerId);
+    });
+    const visibleCount = preferences.timers.reduce((count, timer) => {
+      const runtime = runtimeTimer(timer.id, snapshot);
+      return count + (runtime && (hudShowStopped || runtime.phase === "running") ? 1 : 0);
+    }, 0);
+    elements.hudEmpty.hidden = visibleCount > 0;
+    elements.hudEmpty.textContent =
+      preferences.timers.length === 0
+        ? "No timers configured."
+        : "No timers running. Turn on Show stopped to start one.";
+    if (hudRenderedTimerCount !== preferences.timers.length) {
+      hudRenderedTimerCount = preferences.timers.length;
+      window.requestAnimationFrame(() => {
+        const rect = elements.timerHud.getBoundingClientRect();
+        placeHud(rect.left, rect.top);
+      });
+    }
+  }
+
+  function readHudState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(HUD_STATE_KEY));
+      return parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)
+        ? parsed
+        : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveHudState() {
+    const x = Number.parseFloat(elements.timerHud.style.left);
+    const y = Number.parseFloat(elements.timerHud.style.top);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const width = Number.parseFloat(elements.timerHud.style.width);
+    const height = Number.parseFloat(elements.timerHud.style.height);
+    const state = { x, y, showStopped: hudShowStopped };
+    if (Number.isFinite(width)) state.width = width;
+    if (Number.isFinite(height)) state.height = height;
+    try {
+      localStorage.setItem(HUD_STATE_KEY, JSON.stringify(state));
+    } catch (error) {
+      // The HUD remains interactive when browser storage is unavailable.
+    }
+  }
+
+  function placeHud(x, y, persist = false) {
+    const margin = 8;
+    const width = elements.timerHud.offsetWidth;
+    const height = elements.timerHud.offsetHeight;
+    const left = Math.min(
+      Math.max(margin, Number(x) || margin),
+      Math.max(margin, window.innerWidth - width - margin)
+    );
+    const top = Math.min(
+      Math.max(margin, Number(y) || margin),
+      Math.max(margin, window.innerHeight - height - margin)
+    );
+    elements.timerHud.style.left = `${Math.round(left)}px`;
+    elements.timerHud.style.top = `${Math.round(top)}px`;
+    if (persist) saveHudState();
+  }
+
+  function updateHudStoppedControl() {
+    elements.hudShowStopped.setAttribute("aria-expanded", String(hudShowStopped));
+    elements.hudStoppedLabel.textContent = hudShowStopped
+      ? "Hide stopped timers"
+      : "Show stopped timers";
+  }
+
+  function initializeHudDrag() {
+    const saved = readHudState();
+    hudShowStopped = saved?.showStopped === true;
+    updateHudStoppedControl();
+    if (Number.isFinite(saved?.width)) {
+      elements.timerHud.style.width = `${Math.max(220, saved.width)}px`;
+    }
+    if (Number.isFinite(saved?.height)) {
+      elements.timerHud.style.height = `${Math.max(180, saved.height)}px`;
+    }
+    window.requestAnimationFrame(() => {
+      placeHud(saved?.x ?? 18, saved?.y ?? 92);
+    });
+
+    let drag = null;
+    elements.hudDragHandle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const rect = elements.timerHud.getBoundingClientRect();
+      drag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: rect.left,
+        originY: rect.top
+      };
+      elements.hudDragHandle.setPointerCapture(event.pointerId);
+      elements.timerHud.classList.add("is-dragging");
+      event.preventDefault();
+    });
+    elements.hudDragHandle.addEventListener("pointermove", (event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      placeHud(
+        drag.originX + event.clientX - drag.startX,
+        drag.originY + event.clientY - drag.startY
+      );
+    });
+    const finishDrag = (event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      drag = null;
+      elements.timerHud.classList.remove("is-dragging");
+      saveHudState();
+    };
+    elements.hudDragHandle.addEventListener("pointerup", finishDrag);
+    elements.hudDragHandle.addEventListener("pointercancel", finishDrag);
+    elements.hudDragHandle.addEventListener("lostpointercapture", finishDrag);
+    elements.hudDragHandle.addEventListener("keydown", (event) => {
+      const directions = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1]
+      };
+      const direction = directions[event.key];
+      if (!direction) return;
+      event.preventDefault();
+      const rect = elements.timerHud.getBoundingClientRect();
+      const distance = event.shiftKey ? 40 : 12;
+      placeHud(
+        rect.left + direction[0] * distance,
+        rect.top + direction[1] * distance,
+        true
+      );
+    });
+    window.addEventListener("resize", () => {
+      const rect = elements.timerHud.getBoundingClientRect();
+      placeHud(rect.left, rect.top, true);
+    });
+
+    elements.hudShowStopped.addEventListener("click", () => {
+      hudShowStopped = !hudShowStopped;
+      updateHudStoppedControl();
+      saveHudState();
+      render();
+    });
+
+    elements.hudDefaultSize.addEventListener("click", () => {
+      elements.timerHud.style.removeProperty("width");
+      elements.timerHud.style.removeProperty("height");
+      window.requestAnimationFrame(() => {
+        const rect = elements.timerHud.getBoundingClientRect();
+        placeHud(rect.left, rect.top, true);
+      });
+    });
+
+    if (typeof ResizeObserver === "function") {
+      let resizeFrame = null;
+      const observer = new ResizeObserver(() => {
+        if (!elements.timerHud.style.width && !elements.timerHud.style.height) return;
+        if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+        resizeFrame = window.requestAnimationFrame(() => {
+          const rect = elements.timerHud.getBoundingClientRect();
+          placeHud(rect.left, rect.top, true);
+          resizeFrame = null;
+        });
+      });
+      observer.observe(elements.timerHud);
+    }
+  }
+
   function render() {
     const snapshot = engine.getSnapshot(now());
     preferences.timers.forEach((timer) => {
       renderCard(timer, runtimeTimer(timer.id, snapshot));
     });
+    renderHud(snapshot);
     updateGlobalControls();
     updatePageTone(snapshot);
   }
@@ -517,35 +866,112 @@
     });
   }
 
-  function hideTray() {
+  function concealTray() {
     trayRevision += 1;
     const revision = trayRevision;
     trayEvents = [];
     window.clearTimeout(trayHandle);
     elements.alertTray.classList.remove("is-visible");
+    elements.hudAlertReset.hidden = true;
     trayHandle = window.setTimeout(() => {
       if (revision === trayRevision) elements.alertTray.hidden = true;
     }, 220);
+  }
+
+  function latestCompletionNotice() {
+    const notices = [...completionNotices.values()];
+    return notices.length > 0 ? notices[notices.length - 1] : null;
+  }
+
+  function renderHudAlert(message, color, events) {
+    const revision = trayRevision;
+    const event = events.length > 0 ? events[events.length - 1] : null;
+    const timer = event ? preferenceTimer(event.timerId) : null;
+    trayEvents = events.slice();
+    elements.alertTray.dataset.color = timer ? timer.alertColor : color;
+    elements.alertTray.hidden = false;
+
+    if (event && timer) {
+      const extraCount = Math.max(0, events.length - 1);
+      elements.hudAlertKicker.textContent =
+        event.type === "timer-complete"
+          ? "Timer complete"
+          : event.alertLimit === null
+            ? `Alert ${event.completedAlerts}`
+            : `Alert ${event.completedAlerts} of ${event.alertLimit}`;
+      elements.hudAlertTitle.textContent = timer.label;
+      const detail =
+        event.type === "timer-complete"
+          ? "Finished. Reset it when you want to run it again."
+          : extraCount > 0
+            ? `${extraCount} other timer${extraCount === 1 ? "" : "s"} also alerted.`
+            : "";
+      elements.alertTrayMessage.textContent = detail;
+      elements.alertTrayMessage.hidden = detail.length === 0;
+      elements.hudAlertReset.hidden = event.type !== "timer-complete";
+      elements.hudAlertReset.dataset.timerId = event.timerId;
+      elements.hudAlertReset.textContent = `Reset ${timer.label}`;
+      elements.hudAlertDismiss.setAttribute("aria-label", `Dismiss ${timer.label} notice`);
+      elements.hudAlertDismiss.title =
+        event.type === "timer-complete"
+          ? "Dismiss this prompt; the timer will remain complete."
+          : "Dismiss this alert.";
+    } else {
+      elements.hudAlertKicker.textContent = "Timer notice";
+      elements.hudAlertTitle.textContent = "Heads up";
+      elements.alertTrayMessage.textContent = message;
+      elements.alertTrayMessage.hidden = false;
+      elements.hudAlertReset.hidden = true;
+      delete elements.hudAlertReset.dataset.timerId;
+      elements.hudAlertDismiss.setAttribute("aria-label", "Dismiss timer notice");
+      elements.hudAlertDismiss.title = "Dismiss this notice.";
+    }
+
+    window.requestAnimationFrame(() => {
+      if (revision !== trayRevision) return;
+      elements.alertTray.classList.add("is-visible");
+      const rect = elements.timerHud.getBoundingClientRect();
+      placeHud(rect.left, rect.top);
+    });
+  }
+
+  function showPendingCompletionNotice() {
+    const pending = latestCompletionNotice();
+    if (!pending) {
+      concealTray();
+      return;
+    }
+    const timer = preferenceTimer(pending.timerId);
+    if (!timer) {
+      completionNotices.delete(pending.timerId);
+      showPendingCompletionNotice();
+      return;
+    }
+    trayRevision += 1;
+    window.clearTimeout(trayHandle);
+    renderHudAlert(eventMessage(pending), timer.alertColor, [pending]);
   }
 
   function showTray(message, durationMs = 5000, color = "red", events = []) {
     trayRevision += 1;
     const revision = trayRevision;
     window.clearTimeout(trayHandle);
-    trayEvents = events.slice();
-    elements.alertTrayMessage.textContent = message;
-    elements.alertTray.dataset.color = color;
-    elements.alertTray.hidden = false;
-    window.requestAnimationFrame(() => {
-      if (revision === trayRevision) elements.alertTray.classList.add("is-visible");
+    const freshEvents = events.filter((event) => preferenceTimer(event.timerId));
+    freshEvents.forEach((event) => {
+      if (event.type === "timer-complete") completionNotices.set(event.timerId, event);
     });
+    renderHudAlert(message, color, freshEvents);
+
+    const selectedEvent = freshEvents[freshEvents.length - 1];
+    if (selectedEvent?.type === "timer-complete") return;
+
     trayHandle = window.setTimeout(() => {
       if (revision !== trayRevision) return;
-      trayEvents = [];
       elements.alertTray.classList.remove("is-visible");
       trayHandle = window.setTimeout(() => {
         if (revision !== trayRevision) return;
-        elements.alertTray.hidden = true;
+        trayEvents = [];
+        showPendingCompletionNotice();
       }, 220);
     }, Math.max(1800, durationMs));
   }
@@ -572,6 +998,7 @@
 
       const durationMs = timer.alertDurationSeconds * 1000;
       window.clearTimeout(visualAlertHandles.get(timer.id));
+      window.clearTimeout(pageAlertHandles.get(timer.id));
       visualSequence += 1;
       activeVisualOrder.set(timer.id, visualSequence);
       nodes.card.dataset.alerting = "true";
@@ -580,14 +1007,20 @@
         timer.id,
         window.setTimeout(() => {
           visualAlertHandles.delete(timer.id);
-          activeVisualOrder.delete(timer.id);
           const currentNodes = cardNodes.get(timer.id);
           if (currentNodes) {
             currentNodes.card.dataset.alerting = "false";
             currentNodes.shell.dataset.alerting = "false";
           }
-          updatePageTone();
         }, durationMs)
+      );
+      pageAlertHandles.set(
+        timer.id,
+        window.setTimeout(() => {
+          pageAlertHandles.delete(timer.id);
+          activeVisualOrder.delete(timer.id);
+          updatePageTone();
+        }, Math.max(4200, durationMs))
       );
 
       if (event.type === "timer-complete") {
@@ -645,23 +1078,31 @@
   function clearTimerPresentation(timerId, clearCompletion = true) {
     audio.stop(timerId);
     window.clearTimeout(visualAlertHandles.get(timerId));
+    window.clearTimeout(pageAlertHandles.get(timerId));
     visualAlertHandles.delete(timerId);
+    pageAlertHandles.delete(timerId);
     activeVisualOrder.delete(timerId);
     const nodes = cardNodes.get(timerId);
     if (nodes) {
       nodes.card.dataset.alerting = "false";
       nodes.shell.dataset.alerting = "false";
     }
-    if (clearCompletion) completionOrder.delete(timerId);
+    if (clearCompletion) {
+      completionOrder.delete(timerId);
+      completionNotices.delete(timerId);
+    }
     if (trayEvents.some((event) => event.timerId === timerId)) {
       trayEvents = trayEvents.filter((event) => event.timerId !== timerId);
       if (trayEvents.length === 0) {
-        hideTray();
+        showPendingCompletionNotice();
       } else {
         const lastEvent = trayEvents[trayEvents.length - 1];
         const trayTimer = preferenceTimer(lastEvent.timerId);
-        elements.alertTrayMessage.textContent = combinedEventMessage(trayEvents);
-        elements.alertTray.dataset.color = trayTimer ? trayTimer.alertColor : "red";
+        renderHudAlert(
+          combinedEventMessage(trayEvents),
+          trayTimer ? trayTimer.alertColor : "red",
+          trayEvents
+        );
       }
     }
     updatePageTone();
@@ -670,13 +1111,16 @@
   function clearAllPresentations() {
     audio.stopAll();
     visualAlertHandles.forEach((handle) => window.clearTimeout(handle));
+    pageAlertHandles.forEach((handle) => window.clearTimeout(handle));
     visualAlertHandles.clear();
+    pageAlertHandles.clear();
     activeVisualOrder.clear();
     cardNodes.forEach((nodes) => {
       nodes.card.dataset.alerting = "false";
       nodes.shell.dataset.alerting = "false";
     });
     completionOrder.clear();
+    completionNotices.clear();
     trayRevision += 1;
     trayEvents = [];
     window.clearTimeout(trayHandle);
@@ -909,7 +1353,7 @@
 
   function startTimer(timerId) {
     const timer = preferenceTimer(timerId);
-    if (!timer || !timer.enabled) return;
+    if (!timer) return;
     if (preferences.soundEnabled) observeAudioUnlock(audio.unlock());
     clearTimerPresentation(timerId);
     const started = engine.start(timerId, now());
@@ -930,23 +1374,9 @@
     clearTimerPresentation(timerId);
     const reset = engine.reset(timerId, now());
     if (!reset) return;
-    cardMessages.set(timerId, "Timer reset. Ready when you are.");
+    cardMessages.set(timerId, "Stopped.");
     render();
     syncRuntimeServices();
-  }
-
-  function toggleTimerEnabled(timerId) {
-    const nodes = cardNodes.get(timerId);
-    if (!nodes) return;
-    const enabled = nodes.enabled.checked;
-    if (!enabled) clearTimerPresentation(timerId);
-    const timer = updateTimerPreference(timerId, { enabled });
-    syncEngine(now());
-    setCardFeedback(
-      timerId,
-      enabled ? `${timer.label} enabled and ready.` : `${timer.label} disabled.`
-    );
-    render();
   }
 
   function validDurationParts(minutesInput, secondsInput) {
@@ -1014,6 +1444,10 @@
     const saved = updateTimerPreference(timerId, { label });
     nodes.name.value = saved.label;
     applyCardIdentity(nodes, saved);
+    if (trayEvents.some((event) => event.timerId === timerId)) {
+      renderHudAlert(combinedEventMessage(trayEvents), saved.alertColor, trayEvents);
+    }
+    setCardFeedback(timerId, `${saved.label} name saved.`);
     render();
   }
 
@@ -1093,6 +1527,9 @@
     nodes.colors.forEach((input) => {
       input.checked = input.value === saved.alertColor;
     });
+    if (trayEvents[trayEvents.length - 1]?.timerId === timerId) {
+      elements.alertTray.dataset.color = saved.alertColor;
+    }
     render();
   }
 
@@ -1176,6 +1613,8 @@
     const timer = preferenceTimer(timerId);
     if (!timer) return;
     const index = preferences.timers.findIndex((entry) => entry.id === timerId);
+    const removedNodes = cardNodes.get(timerId);
+    if (removedNodes?.["settings-panel"].open) removedNodes["settings-panel"].close();
     clearTimerPresentation(timerId);
     openSettings.delete(timerId);
     cardMessages.delete(timerId);
@@ -1277,6 +1716,16 @@
   }
 
   elements.addTimerButton.addEventListener("click", addTimer);
+  elements.hudAlertDismiss.addEventListener("click", () => {
+    const event = trayEvents[trayEvents.length - 1];
+    if (event?.type === "timer-complete") completionNotices.delete(event.timerId);
+    trayEvents = [];
+    showPendingCompletionNotice();
+  });
+  elements.hudAlertReset.addEventListener("click", () => {
+    const timerId = elements.hudAlertReset.dataset.timerId;
+    if (timerId) resetTimer(timerId);
+  });
   elements.globalSoundControl.addEventListener("toggle", updateGlobalControls);
   elements.soundEnabledInput.addEventListener("change", () => {
     persistPreferences({
@@ -1295,13 +1744,16 @@
   elements.restoreDefaultsButton.addEventListener("click", () => {
     if (engine.getSnapshot(now()).hasRunningTimers) return;
     clearAllPresentations();
-    preferences = restoreDefaultPreferences();
+    preferences = ensureTimersAvailable(restoreDefaultPreferences());
     openSettings.clear();
     cardMessages.clear();
     engine.syncTimers([], now());
     engine.syncTimers(timerDefinitions(), now());
     audio.setVolume(preferences.soundEnabled ? preferences.volume : 0);
-    cardNodes.forEach((nodes) => nodes.card.remove());
+    cardNodes.forEach((nodes) => {
+      if (nodes["settings-panel"].open) nodes["settings-panel"].close();
+      nodes.card.remove();
+    });
     cardNodes.clear();
     renderTimerCards();
     elements.globalFeedback.textContent = "Default timers restored.";
@@ -1325,6 +1777,7 @@
 
   engine.syncTimers(timerDefinitions(), now());
   audio.setVolume(preferences.soundEnabled ? preferences.volume : 0);
+  initializeHudDrag();
   updateGlobalControls();
   renderTimerCards();
 })();

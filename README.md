@@ -1,18 +1,22 @@
 # Multi Timer
 
-A lightweight dashboard for independent interval timers. It is designed to sit in a narrow browser window at the right edge of a screen while another app or game occupies the rest. There is no framework, package install, build step, or server requirement.
+A lightweight dashboard for independent interval timers. The main page uses a compact three-column grid, while a separate floating overview can be dragged anywhere in the browser window. There is no framework, package install, build step, or server requirement.
 
 ## Use it
 
 1. Open `index.html` in a modern browser.
 2. Start any timer independently.
 3. Use that card's **Alert now** button to count an alert immediately and give only that timer a full new interval.
-4. Reset, disable, edit, or remove one timer without disturbing the others.
+4. Reset, edit, or remove one timer without disturbing the others.
 5. Select **Add timer** whenever you need another timer.
 
 Each timer has its own name, interval, repeat mode, sound, alert duration, color, and completion-color option. A finite timer stops after its chosen number of alerts. An **Until stopped** timer keeps repeating until its own Reset button is used.
 
-Alerts do not cover or block the page. The matching card is highlighted, the page receives a subtle color tint, and a compact alert tray identifies the timer. A finite timer can keep its chosen page tint after completion until that timer is reset. Several completed timers can coexist; the most recently completed persistent timer controls the current page tint.
+Each gear opens that timer's settings in a modal. Click the backdrop, use **Done**, the close button, or press <kbd>Esc</kbd> to close it. Dragging from a field onto the backdrop does not accidentally close the modal.
+
+The floating overview shows running timers by default. Use the subtle **Show stopped timers** chevron at its bottom when you want idle or completed timers included. Its rows are direct controls: click a stopped timer to **Start**, a running timer to **Alert now**, or a completed timer to **Reset**. Drag the overview's title bar to move it, resize it from the lower-right corner, or focus the title bar and use the arrow keys. **Default size** restores the original compact dimensions. Its position, size, and visibility choice are remembered on this device. During an alert it shows the timer's name prominently. Completed finite timers leave a **Reset timer** prompt there until reset or dismissed.
+
+Alerts do not block the page. The matching card is highlighted and the page receives a strong timer-colored background tint, while the floating overview remains readable above it. A finite timer can keep its chosen page tint after completion until that timer is reset. Several completed timers can coexist; the most recently completed persistent timer controls the current page tint.
 
 Preferences save automatically in `localStorage`, but active countdowns are intentionally not restored after a refresh. Existing settings from the older main-timer/reminder versions migrate into ordinary independent timer cards.
 
@@ -20,8 +24,8 @@ The scheduler uses monotonic timestamps instead of decrementing counters. If the
 
 ## Defaults
 
-- Main timer: enabled, 1 minute 2 seconds, 29 alerts, red, Glass Ping
-- Item reminder: disabled, 1 minute 30 seconds, repeats until stopped, amber, Double Tap
+- Main timer: stopped, 1 minute 2 seconds, 29 alerts, red, Glass Ping
+- Item reminder: stopped, 1 minute 30 seconds, repeats until stopped, amber, Double Tap
 - Sound: on at 100% volume
 - Visual alert duration: 3 seconds for Main timer, 1.4 seconds for Item reminder
 - Main timer completion color: stays visible until Reset
@@ -30,7 +34,7 @@ The scheduler uses monotonic timestamps instead of decrementing counters. If the
 
 ```text
 index.html       Dashboard and reusable timer-card markup
-css/styles.css   Right-edge layout, timer cards, and alert states
+css/styles.css   Three-column grid, modal, floating overview, and alert states
 js/app.js        UI controller, scheduler, wake lock, and cleanup
 js/timer.js      Independent timestamp-based timer engine
 js/audio.js      Owner-scoped Web Audio notification sounds

@@ -55,7 +55,7 @@
     Object.freeze({
       id: "item-reminder",
       label: "Item reminder",
-      enabled: false,
+      enabled: true,
       intervalSeconds: 90,
       alertMode: "infinite",
       alertCount: 1,

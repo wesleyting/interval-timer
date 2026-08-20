@@ -74,11 +74,6 @@
         </header>
       </div>
 
-      <div id="alertTray" class="alert-tray" aria-hidden="true" hidden>
-        <span class="alert-tray__marker" aria-hidden="true"></span>
-        <p id="alertTrayMessage">Timer alert</p>
-      </div>
-
       <main class="timer-workspace">
         <ul id="timerStack" class="timer-stack" aria-label="Independent timers"></ul>
 
@@ -88,9 +83,55 @@
           <p>Add a timer, give it a color, and run it independently.</p>
         </section>
 
-        <p class="local-note">Settings stay on this device. Running sessions do not.</p>
       </main>
     </div>
+
+    <aside id="timerHud" class="timer-hud" aria-label="Floating timer overview">
+      <header class="timer-hud__dragbar">
+        <div
+          id="hudDragHandle"
+          class="timer-hud__drag-target"
+          role="button"
+          tabindex="0"
+          aria-label="Move timer overview"
+        >
+          <span class="timer-hud__grip" aria-hidden="true">&#8942;&#8942;</span>
+          <span>Timer overview</span>
+        </div>
+        <button id="hudDefaultSize" class="timer-hud__default-size" type="button">
+          Default size
+        </button>
+      </header>
+
+      <section id="alertTray" class="hud-alert" data-color="red" hidden>
+        <button
+          id="hudAlertDismiss"
+          class="hud-alert__dismiss"
+          type="button"
+          aria-label="Dismiss timer alert"
+        >
+          &times;
+        </button>
+        <p id="hudAlertKicker" class="hud-alert__kicker">Timer alert</p>
+        <h2 id="hudAlertTitle" class="hud-alert__title">Timer ready</h2>
+        <p id="alertTrayMessage" class="hud-alert__message" hidden></p>
+        <button id="hudAlertReset" class="button button--hud" type="button" hidden>
+          Reset timer
+        </button>
+      </section>
+
+      <ul id="hudTimerList" class="timer-hud__list" aria-label="Timer countdown summary"></ul>
+      <p id="hudEmpty" class="timer-hud__empty" hidden>No timers running.</p>
+      <button
+        id="hudShowStopped"
+        class="timer-hud__stopped-toggle"
+        type="button"
+        aria-expanded="false"
+      >
+        <span id="hudStoppedLabel">Show stopped timers</span>
+        <span class="timer-hud__chevron" aria-hidden="true">&#8964;</span>
+      </button>
+    </aside>
 
     <template id="timerCardTemplate">
       <li
@@ -98,7 +139,6 @@
         data-role="card"
         data-state="idle"
         data-color="red"
-        data-enabled="true"
         data-alerting="false"
       >
         <article class="timer-card" data-role="shell">
@@ -107,17 +147,11 @@
               <span class="timer-color-dot" data-role="color-dot" aria-hidden="true"></span>
               <div class="timer-identity__text">
                 <h2 data-role="title">Timer</h2>
-                <span class="timer-state" data-role="state">Ready</span>
+                <span class="timer-state" data-role="state">Stopped</span>
               </div>
             </div>
 
             <div class="timer-card__header-actions">
-              <label class="switch-control switch-control--compact">
-                <span class="visually-hidden">Timer enabled</span>
-                <input data-role="enabled" type="checkbox" checked>
-                <span class="switch" aria-hidden="true"></span>
-                <span class="visually-hidden" data-role="enabled-label">Enabled</span>
-              </label>
               <button
                 class="icon-button"
                 data-role="settings-toggle"
@@ -149,7 +183,7 @@
               <div class="progress-fill" data-role="progress-fill"></div>
             </div>
 
-            <p class="timer-status" data-role="status">Ready when you are.</p>
+            <p class="timer-status" data-role="status">Stopped.</p>
           </div>
 
           <div class="timer-actions">
@@ -160,13 +194,23 @@
             <button class="button button--quiet" data-role="reset" type="button">Reset</button>
           </div>
 
-          <section class="timer-settings" data-role="settings-panel" hidden>
+          <dialog class="timer-settings" data-role="settings-panel">
             <div class="timer-settings__heading">
               <div>
                 <p class="eyebrow">Timer preferences</p>
                 <h3>Settings</h3>
               </div>
-              <p>Changes save automatically.</p>
+              <div class="timer-settings__heading-actions">
+                <p>Changes save automatically.</p>
+                <button
+                  class="icon-button"
+                  data-role="settings-close"
+                  type="button"
+                  aria-label="Close timer settings"
+                >
+                  &times;
+                </button>
+              </div>
             </div>
 
             <div class="settings-grid">
@@ -315,6 +359,9 @@
               <button class="button button--danger" data-role="remove" type="button">
                 Remove timer
               </button>
+              <button class="button button--primary" data-role="settings-done" type="button">
+                Done
+              </button>
               <p
                 class="control-feedback"
                 data-role="feedback"
@@ -323,7 +370,7 @@
                 aria-atomic="true"
               ></p>
             </div>
-          </section>
+          </dialog>
         </article>
       </li>
     </template>
