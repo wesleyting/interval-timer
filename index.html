@@ -98,9 +98,17 @@
           <span class="timer-hud__grip" aria-hidden="true">&#8942;&#8942;</span>
           <span>Timer overview</span>
         </div>
-        <button id="hudDefaultSize" class="timer-hud__default-size" type="button">
-          Default size
-        </button>
+        <div class="timer-hud__size-controls" role="group" aria-label="Overview size">
+          <button id="hudDefaultSize" class="timer-hud__default-size" type="button">
+            Default size
+          </button>
+          <button id="hudSizeDown" class="timer-hud__size-step" type="button" aria-label="Make overview smaller">
+            &minus;
+          </button>
+          <button id="hudSizeUp" class="timer-hud__size-step" type="button" aria-label="Make overview larger">
+            +
+          </button>
+        </div>
       </header>
 
       <section id="alertTray" class="hud-alert" data-color="red" hidden>
@@ -128,8 +136,8 @@
         type="button"
         aria-expanded="false"
       >
-        <span id="hudStoppedLabel">Show stopped timers</span>
-        <span class="timer-hud__chevron" aria-hidden="true">&#8964;</span>
+        <span id="hudStoppedLabel">Show stopped</span>
+        <span class="timer-hud__chevron" aria-hidden="true"></span>
       </button>
     </aside>
 
@@ -183,7 +191,7 @@
               <div class="progress-fill" data-role="progress-fill"></div>
             </div>
 
-            <p class="timer-status" data-role="status">Stopped.</p>
+            <p class="timer-status" data-role="status" hidden></p>
           </div>
 
           <div class="timer-actions">

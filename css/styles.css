@@ -158,24 +158,10 @@ select:disabled {
 }
 
 .app-sticky {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 40;
-  padding-top: max(20px, env(safe-area-inset-top));
-  background: linear-gradient(180deg, rgba(9, 10, 13, 0.98) 76%, transparent);
-  backdrop-filter: blur(12px);
-  transition: background var(--transition-smooth);
-}
-
-body[data-alert-color] .app-sticky {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(var(--page-alert-rgb), 0.38) 0%,
-      rgba(var(--page-alert-rgb), 0.28) 76%,
-      transparent 100%
-    ),
-    linear-gradient(180deg, rgba(9, 10, 13, 0.96) 76%, transparent);
+  padding-top: max(32px, env(safe-area-inset-top));
+  background: transparent;
 }
 
 .app-header,
@@ -196,7 +182,7 @@ body[data-alert-color] .app-sticky {
   min-height: 72px;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 4px 12px;
+  padding: 10px 4px 18px;
 }
 
 .brand {
@@ -292,7 +278,7 @@ h3 {
 
 .sound-menu__panel {
   position: fixed;
-  top: max(72px, calc(env(safe-area-inset-top) + 64px));
+  top: max(104px, calc(env(safe-area-inset-top) + 88px));
   right: max(10px, calc((100vw - 1180px) / 2 + 28px));
   z-index: 50;
   width: min(300px, calc(100vw - 20px));
@@ -331,16 +317,13 @@ h3 {
   top: 92px;
   left: 18px;
   z-index: 1000;
-  width: min(280px, calc(100vw - 16px));
+  width: min(var(--hud-width, 280px), calc(100vw - 16px));
   min-width: min(220px, calc(100vw - 16px));
-  min-height: min(180px, calc(100dvh - 16px));
   max-width: calc(100vw - 16px);
-  max-height: calc(100dvh - 16px);
+  max-height: min(76dvh, 680px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  resize: both;
-  container-type: inline-size;
   border: 1px solid #454a56;
   border-radius: 16px;
   background: rgba(14, 16, 21, 0.985);
@@ -349,6 +332,18 @@ h3 {
     0 24px 70px rgba(0, 0, 0, 0.58),
     0 0 0 1px rgba(255, 255, 255, 0.025);
   backdrop-filter: blur(18px);
+}
+
+.timer-hud[data-size="0"] {
+  --hud-width: 240px;
+}
+
+.timer-hud[data-size="1"] {
+  --hud-width: 280px;
+}
+
+.timer-hud[data-size="2"] {
+  --hud-width: 340px;
 }
 
 .timer-hud.is-dragging {
@@ -393,19 +388,37 @@ h3 {
   letter-spacing: -0.28em;
 }
 
-.timer-hud__default-size {
+.timer-hud__size-controls {
   align-self: stretch;
-  padding: 0 11px;
+  display: flex;
+  align-items: center;
+}
+
+.timer-hud__default-size,
+.timer-hud__size-step {
+  align-self: stretch;
   border: 0;
   background: transparent;
   color: var(--faint);
+}
+
+.timer-hud__default-size {
+  padding: 0 7px;
   font-size: 0.59rem;
   font-weight: 720;
   white-space: nowrap;
 }
 
-.timer-hud__default-size:hover {
+.timer-hud__size-step {
+  width: 28px;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+.timer-hud__default-size:hover,
+.timer-hud__size-step:hover:not(:disabled) {
   color: var(--text-soft);
+  background: #22252c;
 }
 
 .hud-alert {
@@ -460,7 +473,7 @@ h3 {
 .hud-alert__kicker {
   padding-right: 32px;
   color: var(--timer-accent-ink);
-  font-size: clamp(0.62rem, 2cqw, 0.9rem);
+  font-size: 0.62rem;
   font-weight: 850;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -471,14 +484,14 @@ h3 {
   margin: 5px 0 6px;
   overflow-wrap: anywhere;
   color: #fff;
-  font-size: clamp(1.95rem, 10cqw, 3.6rem);
+  font-size: 1.95rem;
   line-height: 1.02;
   letter-spacing: -0.04em;
 }
 
 .hud-alert__message {
   color: #eef0f4;
-  font-size: clamp(0.73rem, 2.4cqw, 1rem);
+  font-size: 0.73rem;
   line-height: 1.42;
 }
 
@@ -489,7 +502,7 @@ h3 {
   border-color: rgba(var(--timer-accent-rgb), 0.74);
   background: var(--timer-accent);
   color: #0d0e11;
-  font-size: clamp(0.76rem, 2.5cqw, 1.05rem);
+  font-size: 0.76rem;
 }
 
 .timer-hud__list {
@@ -577,14 +590,14 @@ h3 {
 
 .timer-hud__copy strong {
   overflow: hidden;
-  font-size: clamp(0.86rem, 3.8cqw, 1.35rem);
+  font-size: 0.86rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .timer-hud__copy small {
   color: var(--muted);
-  font-size: clamp(0.58rem, 2.1cqw, 0.82rem);
+  font-size: 0.58rem;
   font-weight: 760;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -593,29 +606,93 @@ h3 {
 .timer-hud__time {
   margin-left: 17px;
   color: #fff;
-  font-size: clamp(1.46rem, 8cqw, 3rem);
+  font-size: 1.46rem;
   font-weight: 840;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.035em;
+}
+
+.timer-hud__progress {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  min-width: 34px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 820;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+}
+
+.timer-hud__item[data-state="idle"] {
+  opacity: 0.58;
+  transition: opacity var(--transition-fast);
+}
+
+.timer-hud__item[data-state="idle"]:hover,
+.timer-hud__item[data-state="idle"]:focus-within {
+  opacity: 1;
 }
 
 .timer-hud__item[data-state="complete"] .timer-hud__time {
   color: var(--timer-accent-ink);
 }
 
-@container (min-width: 360px) {
-  .hud-alert__title {
-    max-width: calc(100% - 38px);
-  }
+.timer-hud[data-size="0"] .timer-hud__timer {
+  min-height: 66px;
+}
 
-  .timer-hud__timer {
-    min-height: clamp(82px, 22cqw, 112px);
-    padding: clamp(11px, 3cqw, 17px);
-  }
+.timer-hud[data-size="0"] .timer-hud__copy strong {
+  font-size: 0.8rem;
+}
 
-  .timer-hud__action {
-    font-size: clamp(0.68rem, 2cqw, 0.82rem);
-  }
+.timer-hud[data-size="0"] .timer-hud__time {
+  font-size: 1.3rem;
+}
+
+.timer-hud[data-size="0"] .timer-hud__progress {
+  font-size: 0.74rem;
+}
+
+.timer-hud[data-size="2"] .hud-alert__title {
+  max-width: calc(100% - 38px);
+  font-size: 2.35rem;
+}
+
+.timer-hud[data-size="2"] .hud-alert__kicker {
+  font-size: 0.68rem;
+}
+
+.timer-hud[data-size="2"] .timer-hud__progress {
+  font-size: 0.9rem;
+}
+
+.timer-hud[data-size="2"] .hud-alert__message,
+.timer-hud[data-size="2"] .button--hud {
+  font-size: 0.84rem;
+}
+
+.timer-hud[data-size="2"] .timer-hud__timer {
+  min-height: 82px;
+  padding: 11px 13px;
+}
+
+.timer-hud[data-size="2"] .timer-hud__copy strong {
+  font-size: 1rem;
+}
+
+.timer-hud[data-size="2"] .timer-hud__copy small,
+.timer-hud[data-size="2"] .timer-hud__action {
+  font-size: 0.68rem;
+}
+
+.timer-hud[data-size="2"] .timer-hud__time {
+  font-size: 1.8rem;
 }
 
 .timer-hud__empty {
@@ -627,8 +704,9 @@ h3 {
 }
 
 .timer-hud__stopped-toggle {
-  min-height: 38px;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -637,7 +715,7 @@ h3 {
   border-top: 1px solid #282c34;
   background: #121419;
   color: var(--faint);
-  font-size: 0.64rem;
+  font-size: 0.66rem;
   font-weight: 720;
   text-align: left;
 }
@@ -649,24 +727,29 @@ h3 {
 }
 
 .timer-hud__chevron {
-  font-size: 0.9rem;
-  line-height: 1;
-  transition: transform var(--transition-fast);
+  width: 7px;
+  height: 7px;
+  margin: -3px 2px 0 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--transition-fast), margin var(--transition-fast);
 }
 
 .timer-hud__stopped-toggle[aria-expanded="true"] .timer-hud__chevron {
-  transform: rotate(180deg);
+  margin-top: 3px;
+  transform: rotate(225deg);
 }
 
 .timer-workspace {
-  padding-top: 14px;
+  padding-top: 20px;
 }
 
 .timer-stack {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 14px;
+  gap: 20px;
   list-style: none;
 }
 
@@ -728,8 +811,8 @@ h3 {
 
 .timer-card {
   position: relative;
-  min-height: 328px;
-  padding: 14px;
+  min-height: 350px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -871,7 +954,7 @@ h3 {
 
 .timer-card__display {
   flex: 1;
-  padding: 16px 3px 15px;
+  padding: 24px 3px 22px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -888,7 +971,7 @@ h3 {
 }
 
 .countdown {
-  margin: 6px 0 18px;
+  margin: 8px 0 24px;
   color: #fafafa;
   font-size: clamp(3.35rem, 7vw, 5.45rem);
   font-weight: 830;
@@ -921,6 +1004,10 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.progress-summary[data-mode="infinite"] {
+  justify-content: center;
+}
+
 .progress-track {
   width: 100%;
   height: 7px;
@@ -944,7 +1031,6 @@ h3 {
 }
 
 .timer-status {
-  min-height: 1.2rem;
   margin: 9px 0 0;
   color: var(--muted);
   font-size: 0.76rem;
@@ -1577,7 +1663,7 @@ input[type="range"] {
   .timer-stack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
-    gap: 14px;
+    gap: 20px;
   }
 }
 

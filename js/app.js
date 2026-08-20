@@ -35,6 +35,8 @@
     timerHud: document.getElementById("timerHud"),
     hudDragHandle: document.getElementById("hudDragHandle"),
     hudDefaultSize: document.getElementById("hudDefaultSize"),
+    hudSizeDown: document.getElementById("hudSizeDown"),
+    hudSizeUp: document.getElementById("hudSizeUp"),
     hudShowStopped: document.getElementById("hudShowStopped"),
     hudStoppedLabel: document.getElementById("hudStoppedLabel"),
     hudTimerList: document.getElementById("hudTimerList"),
@@ -84,6 +86,7 @@
   let timerIdSequence = 0;
   let hudRenderedTimerCount = -1;
   let hudShowStopped = false;
+  let hudSizeLevel = 1;
 
   const cardNodes = new Map();
   const hudRows = new Map();
@@ -486,9 +489,8 @@
   }
 
   function defaultCardMessage(timer, runtime) {
-    if (runtime.phase === "running") return "Counting independently.";
     if (runtime.phase === "complete") return "Complete. Reset this timer to clear it.";
-    return "Stopped.";
+    return "";
   }
 
   function renderCard(timer, runtime) {
@@ -533,8 +535,10 @@
     );
 
     if (isFinite) {
+      nodes["progress-text"].parentElement.dataset.mode = "finite";
       nodes["progress-text"].textContent = `${completed} of ${total} alerts`;
       nodes["progress-percent"].textContent = `${Math.round(percent)}%`;
+      nodes["progress-percent"].hidden = false;
       nodes["progress-track"].hidden = false;
       nodes["progress-fill"].style.width = `${percent}%`;
       nodes["progress-track"].setAttribute("aria-valuemax", String(total));
@@ -545,12 +549,16 @@
       );
     } else {
       const countText = completed === 1 ? "1 alert" : `${completed} alerts`;
+      nodes["progress-text"].parentElement.dataset.mode = "infinite";
       nodes["progress-text"].textContent = `${countText} · Until stopped`;
-      nodes["progress-percent"].textContent = "∞";
+      nodes["progress-percent"].textContent = "";
+      nodes["progress-percent"].hidden = true;
       nodes["progress-track"].hidden = true;
     }
 
-    nodes.status.textContent = cardMessages.get(timer.id) || defaultCardMessage(timer, runtime);
+    const statusMessage = cardMessages.get(timer.id) || defaultCardMessage(timer, runtime);
+    nodes.status.textContent = statusMessage;
+    nodes.status.hidden = statusMessage.length === 0;
     nodes.start.disabled = runtime.phase !== "idle";
     nodes["alert-now"].disabled = runtime.phase !== "running";
     nodes.reset.disabled = runtime.phase === "idle";
@@ -589,10 +597,12 @@
 
     const time = document.createElement("span");
     time.className = "timer-hud__time";
+    const progress = document.createElement("span");
+    progress.className = "timer-hud__progress";
     const action = document.createElement("span");
     action.className = "timer-hud__action";
     action.textContent = "Alert now";
-    button.append(identity, time, action);
+    button.append(identity, time, progress, action);
     item.append(button);
     button.addEventListener("click", () => {
       const runtime = runtimeTimer(timerId);
@@ -607,7 +617,7 @@
       startTimer(timerId);
     });
 
-    const hudRow = { item, button, name, state, time, action };
+    const hudRow = { item, button, name, state, time, progress, action };
     hudRows.set(timerId, hudRow);
     return hudRow;
   }
@@ -631,6 +641,9 @@
             ? "Running"
             : "Stopped";
       const action = isRunning ? "Alert now" : runtime.phase === "complete" ? "Reset" : "Start";
+      const progress = timer.alertMode === "finite"
+        ? `${runtime.completedAlerts}/${timer.alertCount}`
+        : "";
 
       hudRow.item.dataset.color = timer.alertColor;
       hudRow.item.dataset.state = runtime.phase;
@@ -638,14 +651,16 @@
       hudRow.name.textContent = timer.label;
       hudRow.state.textContent = state;
       hudRow.time.textContent = display;
+      hudRow.progress.textContent = progress;
+      hudRow.progress.hidden = progress.length === 0;
       hudRow.action.textContent = action;
       hudRow.button.setAttribute(
         "aria-label",
         isRunning
-          ? `Alert now for ${timer.label}. ${display} remaining.`
+          ? `Alert now for ${timer.label}. ${display} remaining.${progress ? ` ${progress} alerts.` : ""}`
           : runtime.phase === "complete"
-            ? `Reset ${timer.label}. Timer complete.`
-            : `Start ${timer.label}. Interval ${display}.`
+            ? `Reset ${timer.label}. Timer complete${progress ? ` at ${progress} alerts` : ""}.`
+            : `Start ${timer.label}. Interval ${display}.${progress ? ` ${progress} alerts.` : ""}`
       );
       hudRow.button.title =
         isRunning
@@ -697,11 +712,7 @@
     const x = Number.parseFloat(elements.timerHud.style.left);
     const y = Number.parseFloat(elements.timerHud.style.top);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    const width = Number.parseFloat(elements.timerHud.style.width);
-    const height = Number.parseFloat(elements.timerHud.style.height);
-    const state = { x, y, showStopped: hudShowStopped };
-    if (Number.isFinite(width)) state.width = width;
-    if (Number.isFinite(height)) state.height = height;
+    const state = { x, y, showStopped: hudShowStopped, sizeLevel: hudSizeLevel };
     try {
       localStorage.setItem(HUD_STATE_KEY, JSON.stringify(state));
     } catch (error) {
@@ -729,20 +740,29 @@
   function updateHudStoppedControl() {
     elements.hudShowStopped.setAttribute("aria-expanded", String(hudShowStopped));
     elements.hudStoppedLabel.textContent = hudShowStopped
-      ? "Hide stopped timers"
-      : "Show stopped timers";
+      ? "Hide stopped"
+      : "Show stopped";
+  }
+
+  function setHudSizeLevel(level, persist = true) {
+    hudSizeLevel = Math.min(2, Math.max(0, Math.round(Number(level) || 0)));
+    elements.timerHud.dataset.size = String(hudSizeLevel);
+    elements.hudSizeDown.disabled = hudSizeLevel === 0;
+    elements.hudSizeUp.disabled = hudSizeLevel === 2;
+    elements.hudDefaultSize.disabled = hudSizeLevel === 1;
+    if (!persist) return;
+    window.requestAnimationFrame(() => {
+      const rect = elements.timerHud.getBoundingClientRect();
+      placeHud(rect.left, rect.top, true);
+    });
   }
 
   function initializeHudDrag() {
     const saved = readHudState();
     hudShowStopped = saved?.showStopped === true;
+    hudSizeLevel = Number.isInteger(saved?.sizeLevel) ? saved.sizeLevel : 1;
     updateHudStoppedControl();
-    if (Number.isFinite(saved?.width)) {
-      elements.timerHud.style.width = `${Math.max(220, saved.width)}px`;
-    }
-    if (Number.isFinite(saved?.height)) {
-      elements.timerHud.style.height = `${Math.max(180, saved.height)}px`;
-    }
+    setHudSizeLevel(hudSizeLevel, false);
     window.requestAnimationFrame(() => {
       placeHud(saved?.x ?? 18, saved?.y ?? 92);
     });
@@ -809,27 +829,10 @@
     });
 
     elements.hudDefaultSize.addEventListener("click", () => {
-      elements.timerHud.style.removeProperty("width");
-      elements.timerHud.style.removeProperty("height");
-      window.requestAnimationFrame(() => {
-        const rect = elements.timerHud.getBoundingClientRect();
-        placeHud(rect.left, rect.top, true);
-      });
+      setHudSizeLevel(1);
     });
-
-    if (typeof ResizeObserver === "function") {
-      let resizeFrame = null;
-      const observer = new ResizeObserver(() => {
-        if (!elements.timerHud.style.width && !elements.timerHud.style.height) return;
-        if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
-        resizeFrame = window.requestAnimationFrame(() => {
-          const rect = elements.timerHud.getBoundingClientRect();
-          placeHud(rect.left, rect.top, true);
-          resizeFrame = null;
-        });
-      });
-      observer.observe(elements.timerHud);
-    }
+    elements.hudSizeDown.addEventListener("click", () => setHudSizeLevel(hudSizeLevel - 1));
+    elements.hudSizeUp.addEventListener("click", () => setHudSizeLevel(hudSizeLevel + 1));
   }
 
   function render() {
@@ -1358,7 +1361,7 @@
     clearTimerPresentation(timerId);
     const started = engine.start(timerId, now());
     if (!started) return;
-    cardMessages.set(timerId, "Timer running.");
+    cardMessages.delete(timerId);
     render();
     syncRuntimeServices();
   }
@@ -1374,7 +1377,7 @@
     clearTimerPresentation(timerId);
     const reset = engine.reset(timerId, now());
     if (!reset) return;
-    cardMessages.set(timerId, "Stopped.");
+    cardMessages.delete(timerId);
     render();
     syncRuntimeServices();
   }
