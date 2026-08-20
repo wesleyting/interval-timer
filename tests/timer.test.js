@@ -1,14 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  TimerEngine,
-  normalizeTimerConfig,
-  normalizeReminderDefinitions
-} = require("../js/timer.js");
+const { TimerEngine, normalizeTimerDefinitions } = require("../js/timer.js");
 
-function createEngine() {
+function createEngine(definitions = []) {
   let clock = 0;
   const engine = new TimerEngine({ now: () => clock });
+  engine.syncTimers(definitions, clock);
 
   return {
     engine,
@@ -18,71 +15,65 @@ function createEngine() {
   };
 }
 
-function reminder(id, intervalMs, enabled = true) {
-  return { id, intervalMs, enabled };
+function timer(id, intervalMs = 1000, alertLimit = 3, enabled = true) {
+  return { id, intervalMs, alertLimit, enabled };
 }
 
-test("start schedules several reminders from the same monotonic timestamp", () => {
-  const { engine } = createEngine();
-  const snapshot = engine.start({
-    mainIntervalMs: 62000,
-    totalAlerts: 29,
-    reminders: [
-      reminder("item", 90000),
-      reminder("buff", 150000),
-      reminder("disabled", 30000, false)
-    ]
-  });
+function byId(snapshot, id) {
+  return snapshot.timers.find((entry) => entry.id === id);
+}
 
-  assert.equal(snapshot.phase, "running");
-  assert.equal(snapshot.mainNextAt, 62000);
-  assert.deepEqual(
-    snapshot.reminders.map(({ id, nextAt }) => ({ id, nextAt })),
-    [
-      { id: "item", nextAt: 90000 },
-      { id: "buff", nextAt: 150000 },
-      { id: "disabled", nextAt: null }
-    ]
-  );
-  assert.equal(snapshot.completedMain, 0);
-  assert.equal(engine.getNextDeadline(), 62000);
-});
+test("normalization supports infinite timers and repairs duplicate ids", () => {
+  const input = [timer("same", 1000, null), timer("same", 50, 2), timer("", 2000, 4)];
+  const normalized = normalizeTimerDefinitions(input);
 
-test("legacy single-reminder config and snapshot aliases remain available", () => {
-  const { engine } = createEngine();
-  const snapshot = engine.start({
-    mainIntervalMs: 2000,
-    totalAlerts: 2,
-    secondaryEnabled: true,
-    secondaryIntervalMs: 1500
-  });
-
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.id), ["item-reminder"]);
-  assert.equal(snapshot.secondaryEnabled, true);
-  assert.equal(snapshot.secondaryNextAt, 1500);
-  assert.equal(snapshot.secondaryRemainingMs, 1500);
-});
-
-test("normalization repairs duplicate reminder ids without mutating the input", () => {
-  const input = [reminder("same", 1000), reminder("same", 2000), reminder("", 50)];
-  const normalized = normalizeReminderDefinitions(input);
-
-  assert.deepEqual(
-    normalized.map(({ id, intervalMs }) => ({ id, intervalMs })),
-    [
-      { id: "same", intervalMs: 1000 },
-      { id: "same-2", intervalMs: 2000 },
-      { id: "reminder-3", intervalMs: 90000 }
-    ]
-  );
+  assert.deepEqual(normalized, [
+    { id: "same", enabled: true, intervalMs: 1000, alertLimit: null },
+    { id: "same-2", enabled: true, intervalMs: 62000, alertLimit: 2 },
+    { id: "timer-3", enabled: true, intervalMs: 2000, alertLimit: 4 }
+  ]);
   assert.equal(input[1].id, "same");
   assert.ok(Object.isFrozen(normalized));
-  assert.ok(Object.isFrozen(normalizeTimerConfig({ reminders: input })));
+  assert.ok(Object.isFrozen(normalized[0]));
 });
 
-test("an exact main deadline produces one alert with no duplicate", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({ mainIntervalMs: 1000, totalAlerts: 3 });
+test("sync initializes peer timers idle without scheduling disabled timers", () => {
+  const { engine } = createEngine([
+    timer("one", 1000, 3),
+    timer("two", 1500, null),
+    timer("off", 500, 2, false)
+  ]);
+  const snapshot = engine.getSnapshot();
+
+  assert.equal(snapshot.runningCount, 0);
+  assert.equal(snapshot.hasRunningTimers, false);
+  assert.deepEqual(snapshot.timers.map((entry) => entry.phase), ["idle", "idle", "idle"]);
+  assert.deepEqual(snapshot.timers.map((entry) => entry.nextAt), [null, null, null]);
+  assert.equal(engine.getNextDeadline(), null);
+});
+
+test("timers start independently from their own timestamps", () => {
+  const { engine, setClock } = createEngine([
+    timer("one", 1000, 3),
+    timer("two", 1500, null)
+  ]);
+
+  const first = engine.start("one");
+  setClock(400);
+  const second = engine.start("two");
+  const snapshot = engine.getSnapshot();
+
+  assert.equal(first.nextAt, 1000);
+  assert.equal(second.nextAt, 1900);
+  assert.notEqual(first.runId, second.runId);
+  assert.equal(snapshot.runningCount, 2);
+  assert.equal(engine.getNextDeadline(), 1000);
+  assert.equal(engine.deadline(), 1000);
+});
+
+test("an exact deadline emits one alert with no duplicate", () => {
+  const { engine, setClock } = createEngine([timer("one", 1000, 3)]);
+  engine.start("one");
 
   setClock(999);
   assert.deepEqual(engine.reconcile(), []);
@@ -90,242 +81,269 @@ test("an exact main deadline produces one alert with no duplicate", () => {
   setClock(1000);
   const first = engine.reconcile();
   assert.equal(first.length, 1);
-  assert.equal(first[0].type, "main-alert");
-  assert.equal(first[0].completedMain, 1);
-  assert.equal(engine.getSnapshot().mainNextAt, 2000);
+  assert.equal(first[0].type, "timer-alert");
+  assert.equal(first[0].timerId, "one");
+  assert.equal(first[0].completedAlerts, 1);
+  assert.equal(byId(engine.getSnapshot(), "one").nextAt, 2000);
   assert.deepEqual(engine.reconcile(), []);
 });
 
-test("a late main callback collapses backlog and gives a full next interval", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({ mainIntervalMs: 1000, totalAlerts: 10 });
-
-  setClock(5500);
-  const events = engine.reconcile();
-
-  assert.equal(events.length, 1);
-  assert.equal(events[0].type, "main-alert");
-  assert.equal(events[0].lateByMs, 4500);
-  assert.equal(engine.getSnapshot().completedMain, 1);
-  assert.equal(engine.getSnapshot().mainNextAt, 6500);
-
-  setClock(6499);
-  assert.deepEqual(engine.reconcile(), []);
-});
-
-test("a late callback emits once per overdue reminder and rebases each", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 20000,
-    totalAlerts: 3,
-    reminders: [reminder("one", 1000), reminder("two", 1500)]
-  });
+test("a delayed callback emits once per overdue timer and rebases each", () => {
+  const { engine, setClock } = createEngine([
+    timer("one", 1000, null),
+    timer("two", 1500, null)
+  ]);
+  engine.start("one");
+  engine.start("two");
 
   setClock(5500);
   const events = engine.reconcile();
   const snapshot = engine.getSnapshot();
 
-  assert.deepEqual(events.map((event) => event.reminderId), ["one", "two"]);
+  assert.deepEqual(events.map((event) => event.timerId), ["one", "two"]);
   assert.deepEqual(events.map((event) => event.lateByMs), [4500, 4000]);
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.nextAt), [6500, 7000]);
+  assert.equal(byId(snapshot, "one").nextAt, 6500);
+  assert.equal(byId(snapshot, "two").nextAt, 7000);
   assert.deepEqual(engine.reconcile(), []);
 });
 
-test("Alert Now rebases main and leaves every reminder unchanged", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 1000,
-    totalAlerts: 4,
-    reminders: [reminder("one", 1500), reminder("two", 2300)]
-  });
-
-  setClock(400);
-  const events = engine.alertNow();
-  const snapshot = engine.getSnapshot();
-
-  assert.equal(events[0].type, "main-alert");
-  assert.equal(events[0].source, "manual");
-  assert.equal(snapshot.completedMain, 1);
-  assert.equal(snapshot.mainNextAt, 1400);
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.nextAt), [1500, 2300]);
-});
-
-test("main and several reminders due together fire once in priority order", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 1000,
-    totalAlerts: 3,
-    reminders: [reminder("first", 1000), reminder("second", 1000)]
-  });
+test("simultaneous completion never suppresses another timer", () => {
+  const { engine, setClock } = createEngine([
+    timer("finite", 1000, 1),
+    timer("infinite", 1000, null),
+    timer("also-finite", 1000, 1)
+  ]);
+  engine.start("finite");
+  engine.start("infinite");
+  engine.start("also-finite");
 
   setClock(1000);
   const events = engine.reconcile();
 
   assert.deepEqual(
-    events.map((event) => [event.type, event.reminderId || null]),
+    events.map((event) => [event.timerId, event.type]),
     [
-      ["main-alert", null],
-      ["reminder-alert", "first"],
-      ["reminder-alert", "second"]
+      ["finite", "timer-complete"],
+      ["infinite", "timer-alert"],
+      ["also-finite", "timer-complete"]
     ]
   );
-  assert.deepEqual(engine.getSnapshot().reminders.map((entry) => entry.nextAt), [2000, 2000]);
-  assert.deepEqual(engine.reconcile(), []);
+  assert.equal(byId(engine.getSnapshot(), "infinite").nextAt, 2000);
+  assert.equal(engine.getNextDeadline(), 2000);
 });
 
-test("the final main deadline emits one completion and suppresses all reminders", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 1000,
-    totalAlerts: 1,
-    reminders: [reminder("first", 1000), reminder("second", 500)]
-  });
+test("Alert Now affects only its timer and wins over an overdue deadline", () => {
+  const { engine, setClock } = createEngine([
+    timer("one", 1000, 4),
+    timer("two", 1500, null)
+  ]);
+  engine.start("one");
+  engine.start("two");
 
-  setClock(1000);
-  const events = engine.reconcile();
+  setClock(1200);
+  const event = engine.alertNow("one")[0];
   const snapshot = engine.getSnapshot();
 
-  assert.deepEqual(events.map((event) => event.type), ["completion"]);
-  assert.equal(snapshot.phase, "complete");
-  assert.equal(snapshot.completedMain, 1);
-  assert.equal(snapshot.mainNextAt, null);
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.nextAt), [null, null]);
-  assert.equal(engine.getNextDeadline(), null);
-
-  setClock(100000);
+  assert.equal(event.type, "timer-alert");
+  assert.equal(event.source, "manual");
+  assert.equal(event.lateByMs, 0);
+  assert.equal(byId(snapshot, "one").nextAt, 2200);
+  assert.equal(byId(snapshot, "two").nextAt, 1500);
   assert.deepEqual(engine.reconcile(), []);
-  assert.deepEqual(engine.alertNow(), []);
 });
 
-test("manual final alert also completes exactly once and stops reminders", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 1000,
-    totalAlerts: 2,
-    reminders: [reminder("item", 500)]
-  });
-
-  setClock(100);
-  assert.equal(engine.alertNow()[0].type, "main-alert");
-  setClock(200);
-  assert.equal(engine.alertNow()[0].type, "completion");
-  assert.equal(engine.getSnapshot().reminders[0].nextAt, null);
-  assert.deepEqual(engine.alertNow(), []);
-});
-
-test("a live reminder can be added without changing the main schedule", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({ mainIntervalMs: 5000, totalAlerts: 3, reminders: [] });
-
-  setClock(400);
-  const snapshot = engine.syncReminders([reminder("new", 1200)]);
-
-  assert.equal(snapshot.mainNextAt, 5000);
-  assert.equal(snapshot.reminders[0].nextAt, 1600);
-  assert.equal(engine.getNextDeadline(), 1600);
-});
-
-test("enable, disable, and retime changes start or cancel full reminder intervals", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 10000,
-    totalAlerts: 3,
-    reminders: [reminder("item", 1000, false)]
-  });
-
-  setClock(200);
-  let snapshot = engine.syncReminders([reminder("item", 1000, true)]);
-  assert.equal(snapshot.reminders[0].nextAt, 1200);
-
-  setClock(400);
-  snapshot = engine.syncReminders([reminder("item", 2500, true)]);
-  assert.equal(snapshot.reminders[0].nextAt, 2900);
-
-  setClock(3000);
-  snapshot = engine.syncReminders([reminder("item", 2500, false)]);
-  assert.equal(snapshot.reminders[0].nextAt, null);
-  assert.deepEqual(engine.reconcile(), []);
-  assert.equal(engine.getNextDeadline(), 10000);
-});
-
-test("no-op edits and reordering preserve deadlines while changing collision order", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 10000,
-    totalAlerts: 3,
-    reminders: [reminder("one", 1000), reminder("two", 1000)]
-  });
-
-  setClock(400);
-  let snapshot = engine.syncReminders([
-    reminder("two", 1000),
-    reminder("one", 1000)
+test("a finite timer completes once while an infinite timer never completes", () => {
+  const { engine, setClock } = createEngine([
+    timer("finite", 1000, 2),
+    timer("infinite", 1000, null)
   ]);
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.nextAt), [1000, 1000]);
+  engine.start("finite");
+  engine.start("infinite");
 
   setClock(1000);
-  assert.deepEqual(engine.reconcile().map((event) => event.reminderId), ["two", "one"]);
-  snapshot = engine.getSnapshot();
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.nextAt), [2000, 2000]);
+  assert.deepEqual(engine.reconcile().map((event) => event.type), [
+    "timer-alert",
+    "timer-alert"
+  ]);
+  setClock(2000);
+  assert.deepEqual(engine.reconcile().map((event) => event.type), [
+    "timer-complete",
+    "timer-alert"
+  ]);
+  setClock(3000);
+  assert.deepEqual(engine.reconcile().map((event) => event.type), ["timer-alert"]);
+
+  const snapshot = engine.getSnapshot();
+  assert.equal(byId(snapshot, "finite").phase, "complete");
+  assert.equal(byId(snapshot, "finite").nextAt, null);
+  assert.equal(byId(snapshot, "infinite").completedAlerts, 3);
 });
 
-test("editing one reminder does not rebase any other reminder", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 10000,
-    totalAlerts: 3,
-    reminders: [reminder("one", 1000), reminder("two", 2000)]
-  });
+test("reset clears only one timer and a later start gets a new run id", () => {
+  const { engine, setClock } = createEngine([
+    timer("one", 1000, 3),
+    timer("two", 2000, null)
+  ]);
+  const firstRun = engine.start("one").runId;
+  engine.start("two");
 
   setClock(500);
-  const snapshot = engine.syncReminders([
-    reminder("one", 3000),
-    reminder("two", 2000)
-  ]);
-
-  assert.equal(snapshot.mainNextAt, 10000);
-  assert.deepEqual(snapshot.reminders.map((entry) => entry.nextAt), [3500, 2000]);
-});
-
-test("removing and re-adding an id cannot reuse an event id", () => {
-  const { engine, setClock } = createEngine();
-  engine.start({
-    mainIntervalMs: 10000,
-    totalAlerts: 3,
-    reminders: [reminder("item", 1000)]
-  });
-
-  setClock(1000);
-  const first = engine.reconcile()[0];
-  setClock(1100);
-  engine.syncReminders([]);
-  engine.syncReminders([reminder("item", 100)]);
-  setClock(1200);
-  const second = engine.reconcile()[0];
-
-  assert.equal(first.reminderId, "item");
-  assert.equal(second.reminderId, "item");
-  assert.notEqual(first.id, second.id);
-});
-
-test("reset clears all active state and a new session gets a new id", () => {
-  const { engine, setClock } = createEngine();
-  const first = engine.start({
-    mainIntervalMs: 1000,
-    totalAlerts: 2,
-    reminders: [reminder("item", 500)]
-  });
-  setClock(400);
-  engine.reset();
-
-  const idle = engine.getSnapshot();
-  assert.equal(idle.phase, "idle");
-  assert.equal(idle.mainNextAt, null);
-  assert.deepEqual(idle.reminders, []);
-  assert.equal(idle.completedMain, 0);
+  const reset = engine.reset("one");
+  assert.equal(reset.phase, "idle");
+  assert.equal(reset.nextAt, null);
+  assert.equal(byId(engine.getSnapshot(), "two").nextAt, 2000);
+  assert.equal(engine.getNextDeadline(), 2000);
 
   setClock(600);
-  const second = engine.start({ mainIntervalMs: 2000, totalAlerts: 2, reminders: [] });
-  assert.equal(second.sessionId, first.sessionId + 1);
-  assert.equal(second.mainNextAt, 2600);
+  const secondRun = engine.start("one").runId;
+  assert.notEqual(secondRun, firstRun);
+  assert.equal(byId(engine.getSnapshot(), "one").nextAt, 1600);
+});
+
+test("disabled timers cannot start and disabling a run resets only that timer", () => {
+  const definitions = [timer("one", 1000, 3), timer("off", 500, 2, false)];
+  const { engine, setClock } = createEngine(definitions);
+
+  assert.equal(engine.start("off"), null);
+  assert.deepEqual(engine.alertNow("off"), []);
+  engine.start("one");
+
+  setClock(400);
+  engine.syncTimers([timer("one", 1000, 3, false), timer("off", 500, 2, true)]);
+  const snapshot = engine.getSnapshot();
+
+  assert.equal(byId(snapshot, "one").phase, "idle");
+  assert.equal(byId(snapshot, "one").enabled, false);
+  assert.equal(byId(snapshot, "off").phase, "idle");
+  assert.equal(byId(snapshot, "off").enabled, true);
+  assert.equal(engine.getNextDeadline(), null);
+  assert.equal(engine.start("off").nextAt, 900);
+});
+
+test("live retiming touches one deadline while no-op edits and reordering preserve others", () => {
+  const original = [timer("one", 1000, 4), timer("two", 2000, null)];
+  const { engine, setClock } = createEngine(original);
+  engine.start("one");
+  engine.start("two");
+
+  setClock(400);
+  assert.deepEqual(engine.syncTimers([timer("two", 2000, null), timer("one", 1000, 4)]), []);
+  assert.deepEqual(engine.getSnapshot().timers.map((entry) => entry.nextAt), [2000, 1000]);
+
+  setClock(500);
+  engine.syncTimers([timer("two", 2000, null), timer("one", 3000, 4)]);
+  const snapshot = engine.getSnapshot();
+  assert.equal(byId(snapshot, "one").nextAt, 3500);
+  assert.equal(byId(snapshot, "two").nextAt, 2000);
+});
+
+test("sync before reconcile suppresses a changed stale timer but delivers unrelated due timers", () => {
+  const { engine, setClock } = createEngine([
+    timer("remove", 1000, null),
+    timer("disable", 1000, null),
+    timer("keep", 1000, null)
+  ]);
+  engine.start("remove");
+  engine.start("disable");
+  engine.start("keep");
+
+  setClock(1100);
+  engine.syncTimers([timer("disable", 1000, null, false), timer("keep", 1000, null)]);
+  const events = engine.reconcile();
+
+  assert.deepEqual(events.map((event) => event.timerId), ["keep"]);
+  assert.equal(events[0].lateByMs, 100);
+  assert.equal(byId(engine.getSnapshot(), "disable").phase, "idle");
+});
+
+test("finite and infinite mode edits preserve deadlines or complete once as appropriate", () => {
+  const { engine, setClock } = createEngine([timer("one", 1000, null)]);
+  engine.start("one");
+
+  setClock(100);
+  engine.alertNow("one");
+  setClock(200);
+  engine.alertNow("one");
+  const deadlineBeforeModeChange = byId(engine.getSnapshot(), "one").nextAt;
+
+  setClock(300);
+  const completion = engine.syncTimers([timer("one", 1000, 2)]);
+  assert.equal(completion.length, 1);
+  assert.equal(completion[0].type, "timer-complete");
+  assert.equal(completion[0].source, "configuration");
+  assert.equal(completion[0].completedAlerts, 2);
+  assert.equal(byId(engine.getSnapshot(), "one").phase, "complete");
+  assert.deepEqual(engine.syncTimers([timer("one", 1000, 2)]), []);
+
+  setClock(400);
+  engine.syncTimers([timer("one", 1000, 5)]);
+  assert.equal(byId(engine.getSnapshot(), "one").phase, "idle");
+
+  engine.start("one");
+  const finiteDeadline = byId(engine.getSnapshot(), "one").nextAt;
+  engine.syncTimers([timer("one", 1000, null)]);
+  assert.equal(byId(engine.getSnapshot(), "one").nextAt, finiteDeadline);
+  assert.ok(deadlineBeforeModeChange > 0);
+});
+
+test("remove and re-add cannot reuse run ids or event ids", () => {
+  const { engine, setClock } = createEngine([timer("one", 1000, null)]);
+  const firstRun = engine.start("one").runId;
+
+  setClock(1000);
+  const firstEvent = engine.reconcile()[0];
+  engine.syncTimers([]);
+  engine.syncTimers([timer("one", 100, null)]);
+  const secondRun = engine.start("one").runId;
+  setClock(1100);
+  const secondEvent = engine.reconcile()[0];
+
+  assert.notEqual(secondRun, firstRun);
+  assert.notEqual(secondEvent.id, firstEvent.id);
+  assert.equal(secondEvent.timerId, "one");
+});
+
+test("next deadline updates as timers complete, reset, and are removed", () => {
+  const { engine, setClock } = createEngine([
+    timer("short", 500, 1),
+    timer("long", 1500, null)
+  ]);
+  engine.start("short");
+  engine.start("long");
+  assert.equal(engine.getNextDeadline(), 500);
+
+  setClock(500);
+  engine.reconcile();
+  assert.equal(engine.getNextDeadline(), 1500);
+  engine.reset("long");
+  assert.equal(engine.getNextDeadline(), null);
+  engine.syncTimers([]);
+  assert.deepEqual(engine.snapshot().timers, []);
+});
+
+test("the monotonic guard prevents a backward clock from extending a countdown", () => {
+  const { engine, setClock } = createEngine([timer("one", 1000, null)]);
+  setClock(1000);
+  engine.start("one");
+  setClock(1500);
+  assert.equal(byId(engine.getSnapshot(), "one").remainingMs, 500);
+  setClock(1200);
+  assert.equal(byId(engine.getSnapshot(), "one").remainingMs, 500);
+  setClock(2000);
+  assert.equal(engine.reconcile().length, 1);
+});
+
+test("unknown timer commands and an empty dashboard are harmless", () => {
+  const { engine } = createEngine([]);
+
+  assert.equal(engine.start("missing"), null);
+  assert.equal(engine.reset("missing"), null);
+  assert.deepEqual(engine.alertNow("missing"), []);
+  assert.deepEqual(engine.reconcile(), []);
+  assert.deepEqual(engine.getSnapshot(), {
+    timers: [],
+    runningCount: 0,
+    hasRunningTimers: false
+  });
+  assert.equal(engine.getNextDeadline(), null);
 });

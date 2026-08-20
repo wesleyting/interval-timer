@@ -182,6 +182,65 @@ test("stopAll invalidates and stops every active scheduled source", async () => 
   }
 });
 
+test("stopping one owner leaves another owner's active sources playing", async () => {
+  const previousAudioContext = globalThis.AudioContext;
+  globalThis.AudioContext = FakeAudioContext;
+
+  try {
+    const audio = new AudioManager();
+    await audio.playMain("glass-ping", {
+      enabled: true,
+      volume: 80,
+      ownerId: "timer-a"
+    });
+    const timerASources = [...audio.context.sources];
+
+    await audio.playSecondary("double-tap", {
+      enabled: true,
+      volume: 80,
+      ownerId: "timer-b"
+    });
+    const timerBSources = audio.context.sources.slice(timerASources.length);
+
+    audio.stop("timer-a");
+
+    assert.ok(timerASources.every((source) => source.stoppedImmediately));
+    assert.ok(timerBSources.every((source) => !source.stoppedImmediately));
+    assert.equal(audio.activeSources.size, timerBSources.length);
+  } finally {
+    globalThis.AudioContext = previousAudioContext;
+  }
+});
+
+test("stopping one owner during resume invalidates only that pending playback", async () => {
+  const previousAudioContext = globalThis.AudioContext;
+  globalThis.AudioContext = DeferredAudioContext;
+
+  try {
+    const audio = new AudioManager();
+    const timerAPlayback = audio.playMain("glass-ping", {
+      enabled: true,
+      volume: 100,
+      ownerId: "timer-a"
+    });
+    const timerBPlayback = audio.playSecondary("double-tap", {
+      enabled: true,
+      volume: 100,
+      ownerId: "timer-b"
+    });
+    await Promise.resolve();
+
+    audio.stop("timer-a");
+    DeferredAudioContext.lastInstance.finishResume();
+
+    assert.deepEqual(await Promise.all([timerAPlayback, timerBPlayback]), [false, true]);
+    assert.equal(audio.context.sources.length, 4);
+    assert.equal(audio.activeSources.size, 4);
+  } finally {
+    globalThis.AudioContext = previousAudioContext;
+  }
+});
+
 test("a volume change wins while audio resume is pending", async () => {
   const previousAudioContext = globalThis.AudioContext;
   globalThis.AudioContext = DeferredAudioContext;

@@ -6,369 +6,325 @@
     <meta name="theme-color" content="#090a0d">
     <meta
       name="description"
-      content="A reliable, distraction-free interval timer with independent reminders."
+      content="A reliable, distraction-free dashboard for independent interval timers."
     >
-    <title>Interval Timer</title>
+    <title>Interval Timers</title>
     <link rel="stylesheet" href="css/styles.css">
     <script defer src="js/storage.js"></script>
     <script defer src="js/timer.js"></script>
     <script defer src="js/audio.js"></script>
     <script defer src="js/app.js"></script>
   </head>
-  <body data-state="ready">
-    <div id="alertOverlay" class="alert-overlay" aria-hidden="true">
-      <div class="alert-overlay__surface"></div>
-      <div class="alert-overlay__label" id="alertOverlayLabel"></div>
-    </div>
-    <div id="secondaryAlertAccent" class="secondary-alert-accent" aria-hidden="true">
-      <span id="secondaryAlertAccentLabel">Item reminder</span>
-    </div>
-
-    <main class="app-shell">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">Focus utility</p>
-          <h1>Interval Timer</h1>
-        </div>
-
-        <div class="header-actions">
-          <div id="stateBadge" class="state-badge">
-            <span class="state-badge__dot" aria-hidden="true"></span>
-            <span id="stateText">Ready</span>
-          </div>
-          <button
-            id="settingsButton"
-            class="icon-button"
-            type="button"
-            aria-label="Open settings"
-            title="Settings"
-          >
-            <span aria-hidden="true">&#9881;</span>
-          </button>
-        </div>
-      </header>
-
-      <section class="timer-card" aria-labelledby="timerLabel">
-        <p id="timerLabel" class="timer-label">Next alert in</p>
-        <div id="timer" class="countdown" role="timer" aria-label="1 minute 2 seconds remaining">
-          1:02
-        </div>
-
-        <ul
-          id="reminderStatuses"
-          class="reminder-statuses"
-          aria-label="Active reminder countdowns"
-          hidden
-        ></ul>
-
-        <div class="progress-summary">
-          <span id="progressText">0 of 29 alerts</span>
-          <span id="progressPercent">0%</span>
-        </div>
-        <div
-          id="progressTrack"
-          class="progress-track"
-          role="progressbar"
-          aria-label="Session progress"
-          aria-valuemin="0"
-          aria-valuemax="29"
-          aria-valuenow="0"
-          aria-valuetext="0 of 29 alerts"
-        >
-          <div id="progressFill" class="progress-fill"></div>
-        </div>
-
-        <p id="statusMessage" class="status-message">Ready when you are.</p>
-      </section>
-
-      <div class="timer-actions">
-        <button id="startButton" class="button button--primary" type="button">Start</button>
-        <button
-          id="alertNowButton"
-          class="button button--alert"
-          type="button"
-          title="Trigger an alert now (F)"
-          aria-keyshortcuts="F"
-          disabled
-        >
-          Alert Now <kbd>F</kbd>
-        </button>
-        <button id="resetButton" class="button button--quiet" type="button">Reset</button>
-      </div>
-
-      <p class="local-note">Preferences stay on this device. Active sessions do not.</p>
-    </main>
-
-    <dialog
-      id="settingsDialog"
-      class="settings-dialog"
-      aria-labelledby="settingsTitle"
-      aria-modal="true"
-    >
-      <div class="dialog-header">
-        <div>
-          <p class="eyebrow">Preferences</p>
-          <h2 id="settingsTitle">Settings</h2>
-        </div>
-        <button
-          id="closeSettingsButton"
-          class="icon-button"
-          type="button"
-          aria-label="Close settings"
-        >
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-
-      <div class="dialog-body">
-        <section class="settings-section" aria-labelledby="mainSettingsTitle">
-          <div class="settings-section__heading">
-            <div>
-              <h3 id="mainSettingsTitle">Main timer</h3>
-              <p>The alert schedule for each session.</p>
-            </div>
+  <body>
+    <div class="app-shell">
+      <div class="app-sticky">
+        <header class="app-header">
+          <div class="brand">
+            <p class="eyebrow">Focus utility</p>
+            <h1>Timers</h1>
           </div>
 
-          <div class="field-grid">
-            <fieldset class="field duration-field">
-              <legend>Interval</legend>
-              <div class="duration-inputs">
-                <label class="duration-part">
-                  <span class="visually-hidden">Main interval minutes</span>
-                  <span class="input-with-unit">
-                    <input
-                      id="mainIntervalMinutesInput"
-                      data-session-locked
-                      type="text"
-                      pattern="[0-9]*"
-                      inputmode="numeric"
-                    >
-                    <span aria-hidden="true">min</span>
+          <div class="header-actions">
+            <details id="globalSoundControl" class="sound-menu">
+              <summary class="header-button">
+                <span class="header-button__icon" aria-hidden="true">&#9835;</span>
+                <span id="soundEnabledLabel">Sound on</span>
+              </summary>
+
+              <div class="sound-menu__panel">
+                <div class="sound-menu__heading">
+                  <div>
+                    <h2>Sound</h2>
+                    <p>Applies to every timer.</p>
+                  </div>
+                  <label class="switch-control">
+                    <span class="visually-hidden">Sound enabled</span>
+                    <input id="soundEnabledInput" type="checkbox">
+                    <span class="switch" aria-hidden="true"></span>
+                    <span id="soundSwitchLabel">On</span>
+                  </label>
+                </div>
+
+                <label class="field field--range" for="volumeInput">
+                  <span>Volume</span>
+                  <span class="range-control">
+                    <input id="volumeInput" type="range" min="0" max="100" step="1">
+                    <output id="volumeValue" for="volumeInput">100%</output>
                   </span>
                 </label>
-                <label class="duration-part">
-                  <span class="visually-hidden">Main interval seconds</span>
-                  <span class="input-with-unit">
-                    <input
-                      id="mainIntervalSecondsInput"
-                      data-session-locked
-                      type="text"
-                      pattern="[0-9]*([.][0-9]+)?"
-                      inputmode="decimal"
-                    >
-                    <span aria-hidden="true">sec</span>
-                  </span>
-                </label>
-              </div>
-            </fieldset>
 
-            <label class="field">
-              <span>Number of alerts</span>
-              <input
-                id="totalAlertsInput"
-                data-session-locked
-                type="text"
-                pattern="[0-9]*"
-                inputmode="numeric"
-              >
-            </label>
-
-            <label class="field">
-              <span>Main alert duration</span>
-              <span class="input-with-unit">
-                <input
-                  id="mainAlertDurationInput"
-                  type="text"
-                  pattern="[0-9]*([.][0-9]+)?"
-                  inputmode="decimal"
-                >
-                <span>sec</span>
-              </span>
-            </label>
-
-            <div class="field">
-              <label for="mainSoundSelect">Main sound</label>
-              <span class="select-with-action">
-                <select id="mainSoundSelect">
-                  <option value="glass-ping">Glass Ping</option>
-                  <option value="bright-bell">Bright Bell</option>
-                  <option value="soft-chime">Soft Chime</option>
-                </select>
-                <button
-                  id="previewMainSoundButton"
-                  class="mini-button"
-                  type="button"
-                  aria-label="Test main sound"
-                >
-                  Test
+                <button id="restoreDefaultsButton" class="button button--quiet" type="button">
+                  Restore defaults
                 </button>
-              </span>
-            </div>
-          </div>
-        </section>
+                <p
+                  id="globalFeedback"
+                  class="control-feedback"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                ></p>
+              </div>
+            </details>
 
-        <section class="settings-section" aria-labelledby="soundSettingsTitle">
-          <div class="settings-section__heading settings-section__heading--inline">
-            <div>
-              <h3 id="soundSettingsTitle">Sound</h3>
-              <p>One sound control applies to all notifications.</p>
-            </div>
-            <label class="switch-control">
-              <span class="visually-hidden">Sound enabled</span>
-              <input id="soundEnabledInput" type="checkbox">
-              <span class="switch" aria-hidden="true"></span>
-              <span id="soundEnabledLabel">On</span>
-            </label>
-          </div>
-
-          <div class="field field--range">
-            <label for="volumeInput">Volume</label>
-            <span class="range-control">
-              <input id="volumeInput" type="range" min="0" max="100" step="1">
-              <output id="volumeValue" for="volumeInput">100%</output>
-            </span>
-          </div>
-        </section>
-
-        <section
-          class="settings-section"
-          aria-labelledby="reminderSettingsTitle"
-          aria-describedby="remindersDescription"
-        >
-          <div class="settings-section__heading settings-section__heading--reminders">
-            <div>
-              <h3 id="reminderSettingsTitle">Reminders</h3>
-              <p id="remindersDescription">
-                Repeat independently while the main session runs. Live changes affect only
-                the reminder you edit.
-              </p>
-            </div>
-            <button
-              id="addReminderButton"
-              class="mini-button reminder-add-button"
-              type="button"
-              aria-describedby="remindersDescription"
-            >
-              Add reminder
+            <button id="addTimerButton" class="button button--primary add-timer-button" type="button">
+              <span aria-hidden="true">+</span>
+              <span>Add timer</span>
             </button>
           </div>
+        </header>
+      </div>
 
-          <ul
-            id="remindersList"
-            class="reminder-settings-list"
-            aria-label="Configured reminders"
-          ></ul>
-          <p id="remindersEmpty" class="reminders-empty">
-            No reminders yet. Add one whenever you need another independent countdown.
-          </p>
+      <div id="alertTray" class="alert-tray" aria-hidden="true" hidden>
+        <span class="alert-tray__marker" aria-hidden="true"></span>
+        <p id="alertTrayMessage">Timer alert</p>
+      </div>
+
+      <main class="timer-workspace">
+        <ul id="timerStack" class="timer-stack" aria-label="Independent timers"></ul>
+
+        <section id="timersEmpty" class="timers-empty" aria-labelledby="timersEmptyTitle" hidden>
+          <span class="timers-empty__icon" aria-hidden="true">+</span>
+          <h2 id="timersEmptyTitle">No timers yet</h2>
+          <p>Add a timer, give it a color, and run it independently.</p>
         </section>
 
-        <p id="settingsHint" class="settings-hint">
-          Changes save automatically. Main session timing locks while running; reminders stay
-          editable.
-        </p>
-        <p
-          id="settingsFeedback"
-          class="settings-feedback"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        ></p>
-      </div>
+        <p class="local-note">Settings stay on this device. Running sessions do not.</p>
+      </main>
+    </div>
 
-      <div class="dialog-footer">
-        <button id="restoreDefaultsButton" class="button button--quiet" type="button">
-          Restore defaults
-        </button>
-        <button id="doneSettingsButton" class="button button--primary" type="button">Done</button>
-      </div>
-    </dialog>
+    <template id="timerCardTemplate">
+      <li
+        class="timer-card-item"
+        data-role="card"
+        data-state="idle"
+        data-color="red"
+        data-enabled="true"
+        data-alerting="false"
+      >
+        <article class="timer-card" data-role="shell">
+          <header class="timer-card__header">
+            <div class="timer-identity">
+              <span class="timer-color-dot" data-role="color-dot" aria-hidden="true"></span>
+              <div class="timer-identity__text">
+                <h2 data-role="title">Timer</h2>
+                <span class="timer-state" data-role="state">Ready</span>
+              </div>
+            </div>
 
-    <template id="reminderSettingsTemplate">
-      <li class="reminder-settings-item" data-role="card">
-        <fieldset class="reminder-card">
-          <legend class="visually-hidden" data-role="title">Reminder settings</legend>
-
-          <div class="reminder-card__header">
-            <label class="field reminder-name-field">
-              <span>Reminder name</span>
-              <input
-                data-role="label"
-                type="text"
-                maxlength="40"
-                autocomplete="off"
-                spellcheck="false"
-              >
-            </label>
-
-            <div class="reminder-card__actions">
-              <label class="switch-control">
-                <span class="visually-hidden">Reminder enabled</span>
-                <input data-role="enabled" type="checkbox">
-                <span class="switch switch--amber" aria-hidden="true"></span>
-                <span data-role="enabled-label">On</span>
+            <div class="timer-card__header-actions">
+              <label class="switch-control switch-control--compact">
+                <span class="visually-hidden">Timer enabled</span>
+                <input data-role="enabled" type="checkbox" checked>
+                <span class="switch" aria-hidden="true"></span>
+                <span class="visually-hidden" data-role="enabled-label">Enabled</span>
               </label>
               <button
-                class="mini-button reminder-remove-button"
-                data-role="remove"
+                class="icon-button"
+                data-role="settings-toggle"
                 type="button"
+                aria-expanded="false"
               >
-                Remove
+                <span aria-hidden="true">&#9881;</span>
+                <span class="visually-hidden">Open timer settings</span>
               </button>
             </div>
-          </div>
+          </header>
 
-          <div class="reminder-card__fields">
-            <fieldset class="field duration-field">
-              <legend>Interval</legend>
-              <div class="duration-inputs">
-                <label class="duration-part">
-                  <span class="visually-hidden">Reminder interval minutes</span>
-                  <span class="input-with-unit">
-                    <input
-                      data-role="minutes"
-                      type="text"
-                      pattern="[0-9]*"
-                      inputmode="numeric"
-                    >
-                    <span aria-hidden="true">min</span>
-                  </span>
-                </label>
-                <label class="duration-part">
-                  <span class="visually-hidden">Reminder interval seconds</span>
-                  <span class="input-with-unit">
-                    <input
-                      data-role="seconds"
-                      type="text"
-                      pattern="[0-9]*([.][0-9]+)?"
-                      inputmode="decimal"
-                    >
-                    <span aria-hidden="true">sec</span>
-                  </span>
-                </label>
-              </div>
-            </fieldset>
+          <div class="timer-card__display">
+            <p class="timer-label" data-role="countdown-label">Next alert in</p>
+            <div class="countdown" data-role="countdown" role="timer" aria-live="off">1:02</div>
 
-            <div class="field">
-              <span>Reminder sound</span>
-              <span class="select-with-action">
-                <select data-role="sound" aria-label="Reminder sound">
-                  <option value="double-tap">Low Double Tap</option>
-                  <option value="signal-drop">Signal Drop</option>
-                  <option value="wood-block">Wood Block</option>
-                </select>
-                <button
-                  class="mini-button"
-                  data-role="test"
-                  type="button"
-                  aria-label="Test reminder sound"
-                >
-                  Test
-                </button>
-              </span>
+            <div class="progress-summary">
+              <span data-role="progress-text">0 of 29 alerts</span>
+              <span data-role="progress-percent">0%</span>
             </div>
+            <div
+              class="progress-track"
+              data-role="progress-track"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="29"
+              aria-valuenow="0"
+            >
+              <div class="progress-fill" data-role="progress-fill"></div>
+            </div>
+
+            <p class="timer-status" data-role="status">Ready when you are.</p>
           </div>
-        </fieldset>
+
+          <div class="timer-actions">
+            <button class="button button--primary" data-role="start" type="button">Start</button>
+            <button class="button button--accent" data-role="alert-now" type="button" disabled>
+              Alert now
+            </button>
+            <button class="button button--quiet" data-role="reset" type="button">Reset</button>
+          </div>
+
+          <section class="timer-settings" data-role="settings-panel" hidden>
+            <div class="timer-settings__heading">
+              <div>
+                <p class="eyebrow">Timer preferences</p>
+                <h3>Settings</h3>
+              </div>
+              <p>Changes save automatically.</p>
+            </div>
+
+            <div class="settings-grid">
+              <label class="field field--wide">
+                <span>Name</span>
+                <input data-role="name" type="text" maxlength="60" autocomplete="off">
+              </label>
+
+              <fieldset class="field duration-field">
+                <legend>Interval</legend>
+                <div class="duration-inputs">
+                  <label class="duration-part">
+                    <span class="visually-hidden">Interval minutes</span>
+                    <span class="input-with-unit">
+                      <input
+                        data-role="minutes"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        role="spinbutton"
+                        aria-valuemin="0"
+                        aria-valuemax="1440"
+                      >
+                      <span aria-hidden="true">min</span>
+                    </span>
+                  </label>
+                  <label class="duration-part">
+                    <span class="visually-hidden">Interval seconds</span>
+                    <span class="input-with-unit">
+                      <input
+                        data-role="seconds"
+                        type="text"
+                        inputmode="decimal"
+                        role="spinbutton"
+                        aria-valuemin="0"
+                        aria-valuemax="59.9"
+                      >
+                      <span aria-hidden="true">sec</span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <label class="field">
+                <span>Repeats</span>
+                <select data-role="repeat-mode">
+                  <option value="finite">Number of alerts</option>
+                  <option value="infinite">Until stopped</option>
+                </select>
+              </label>
+
+              <label class="field" data-role="total-alerts-field">
+                <span>Number of alerts</span>
+                <input
+                  data-role="total-alerts"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  role="spinbutton"
+                  aria-valuemin="1"
+                  aria-valuemax="9999"
+                >
+              </label>
+
+              <div class="field">
+                <span>Alert sound</span>
+                <span class="select-with-action">
+                  <select data-role="sound" aria-label="Alert sound">
+                    <option value="glass-ping">Glass Ping</option>
+                    <option value="bright-bell">Bright Bell</option>
+                    <option value="soft-chime">Soft Chime</option>
+                    <option value="double-tap">Low Double Tap</option>
+                    <option value="signal-drop">Signal Drop</option>
+                    <option value="wood-block">Wood Block</option>
+                  </select>
+                  <button class="mini-button" data-role="test-sound" type="button">Test</button>
+                </span>
+              </div>
+
+              <label class="field">
+                <span>Visual alert duration</span>
+                <span class="input-with-unit">
+                  <input
+                    data-role="alert-duration"
+                    type="text"
+                    inputmode="decimal"
+                    role="spinbutton"
+                    aria-valuemin="0.5"
+                    aria-valuemax="15"
+                  >
+                  <span aria-hidden="true">sec</span>
+                </span>
+              </label>
+
+              <fieldset class="field field--wide color-field">
+                <legend>Timer color</legend>
+                <div class="color-options">
+                  <label class="color-option color-option--red">
+                    <input data-role="color" type="radio" value="red">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Red</span>
+                  </label>
+                  <label class="color-option color-option--amber">
+                    <input data-role="color" type="radio" value="amber">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Amber</span>
+                  </label>
+                  <label class="color-option color-option--cyan">
+                    <input data-role="color" type="radio" value="cyan">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Cyan</span>
+                  </label>
+                  <label class="color-option color-option--blue">
+                    <input data-role="color" type="radio" value="blue">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Blue</span>
+                  </label>
+                  <label class="color-option color-option--violet">
+                    <input data-role="color" type="radio" value="violet">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Violet</span>
+                  </label>
+                  <label class="color-option color-option--green">
+                    <input data-role="color" type="radio" value="green">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Green</span>
+                  </label>
+                  <label class="color-option color-option--pink">
+                    <input data-role="color" type="radio" value="pink">
+                    <span aria-hidden="true"></span>
+                    <span class="visually-hidden">Pink</span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <label class="check-control field--wide">
+                <input data-role="persistent-completion" type="checkbox" checked>
+                <span>
+                  <strong>Keep completion color</strong>
+                  <small>Keep the page tinted until this timer is Reset.</small>
+                </span>
+              </label>
+            </div>
+
+            <div class="timer-settings__footer">
+              <button class="button button--danger" data-role="remove" type="button">
+                Remove timer
+              </button>
+              <p
+                class="control-feedback"
+                data-role="feedback"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></p>
+            </div>
+          </section>
+        </article>
       </li>
     </template>
 
@@ -380,7 +336,7 @@
     ></div>
 
     <noscript>
-      <p class="noscript-message">This timer needs JavaScript enabled to run.</p>
+      <p class="noscript-message">These timers need JavaScript enabled to run.</p>
     </noscript>
   </body>
 </html>

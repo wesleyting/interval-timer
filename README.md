@@ -1,42 +1,41 @@
-# Interval Timer
+# Multi Timer
 
-A lightweight interval timer for repeated main alerts, with multiple named independent reminders (up to 50). It is a static web app: there is no framework, package install, build step, or server requirement.
+A lightweight dashboard for independent interval timers. It is designed to sit in a narrow browser window at the right edge of a screen while another app or game occupies the rest. There is no framework, package install, build step, or server requirement.
 
 ## Use it
 
 1. Open `index.html` in a modern browser.
-2. Select **Start** to begin a new session.
-3. Select **Alert Now** (or press <kbd>F</kbd>) to count an alert immediately and start a full new main interval from that moment.
-4. Select **Reset** to stop the session, sounds, and alert visuals.
+2. Start any timer independently.
+3. Use that card's **Alert now** button to count an alert immediately and give only that timer a full new interval.
+4. Reset, disable, edit, or remove one timer without disturbing the others.
+5. Select **Add timer** whenever you need another timer.
 
-Use **Settings** to change preferences. Changes save automatically in `localStorage`; an active session is intentionally never restored after a refresh or reopening the page.
+Each timer has its own name, interval, repeat mode, sound, alert duration, color, and completion-color option. A finite timer stops after its chosen number of alerts. An **Until stopped** timer keeps repeating until its own Reset button is used.
 
-Main and reminder intervals use separate minute and second fields. While a session is running, the main schedule stays locked, but reminders remain live: you can add, remove, enable, disable, rename, or retime them. Adding, enabling, or retiming a reminder starts a full interval for that reminder from the moment of the change without moving the main deadline or any other reminder.
+Alerts do not cover or block the page. The matching card is highlighted, the page receives a subtle color tint, and a compact alert tray identifies the timer. A finite timer can keep its chosen page tint after completion until that timer is reset. Several completed timers can coexist; the most recently completed persistent timer controls the current page tint.
 
-Clicking into a number selects its current value so the next number you type replaces it. Leaving an edited number blank restores its last saved value. Settings close only with **Done**, the close button, or <kbd>Esc</kbd>; dragging outside the dialog does not dismiss it.
+Preferences save automatically in `localStorage`, but active countdowns are intentionally not restored after a refresh. Existing settings from the older main-timer/reminder versions migrate into ordinary independent timer cards.
 
-The scheduler uses monotonic timestamps instead of decrementing a counter. If a browser delays a callback in the background, the app emits at most one overdue notification and starts a full new interval from the time that notification is delivered. It does not replay a missed-alert backlog.
+The scheduler uses monotonic timestamps instead of decrementing counters. If the browser delays a callback in the background, each overdue running timer emits at most one notification and receives a full new interval from delivery time. Missed-alert backlogs are not replayed.
 
 ## Defaults
 
-- Main interval: 62 seconds
-- Main alerts: 29
-- Main sound: Glass Ping
-- Main visual alert: 3 seconds of continuous red
+- Main timer: enabled, 1 minute 2 seconds, 29 alerts, red, Glass Ping
+- Item reminder: disabled, 1 minute 30 seconds, repeats until stopped, amber, Double Tap
 - Sound: on at 100% volume
-- One Item reminder: off (1 minute 30 seconds when enabled)
-- Completion: one ascending chime and completion visual, then silence
+- Visual alert duration: 3 seconds for Main timer, 1.4 seconds for Item reminder
+- Main timer completion color: stays visible until Reset
 
 ## Files
 
 ```text
-index.html       App markup and settings dialog
-css/styles.css   Responsive design and alert states
-js/app.js        UI, scheduling loop, wake lock, and cleanup
-js/timer.js      Timestamp-based timer state engine
-js/audio.js      Local Web Audio notification sounds
-js/storage.js    Preference defaults and localStorage
-tests/           Timer and preference unit tests
+index.html       Dashboard and reusable timer-card markup
+css/styles.css   Right-edge layout, timer cards, and alert states
+js/app.js        UI controller, scheduler, wake lock, and cleanup
+js/timer.js      Independent timestamp-based timer engine
+js/audio.js      Owner-scoped Web Audio notification sounds
+js/storage.js    Defaults, preference migration, and localStorage
+tests/           Timer, storage, and audio unit tests
 ```
 
 The optional tests use Node's built-in test runner and need no dependencies:
