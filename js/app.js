@@ -34,7 +34,7 @@
     addTimerButton: document.getElementById("addTimerButton"),
     timerHud: document.getElementById("timerHud"),
     hudDragHandle: document.getElementById("hudDragHandle"),
-    hudDefaultSize: document.getElementById("hudDefaultSize"),
+    hudFocusMode: document.getElementById("hudFocusMode"),
     hudSizeDown: document.getElementById("hudSizeDown"),
     hudSizeUp: document.getElementById("hudSizeUp"),
     hudShowStopped: document.getElementById("hudShowStopped"),
@@ -87,6 +87,9 @@
   let hudRenderedTimerCount = -1;
   let hudShowStopped = false;
   let hudSizeLevel = 1;
+  let hudFocusMode = false;
+  let hudPreferredX = 18;
+  let hudPreferredY = 92;
 
   const cardNodes = new Map();
   const hudRows = new Map();
@@ -691,8 +694,7 @@
     if (hudRenderedTimerCount !== preferences.timers.length) {
       hudRenderedTimerCount = preferences.timers.length;
       window.requestAnimationFrame(() => {
-        const rect = elements.timerHud.getBoundingClientRect();
-        placeHud(rect.left, rect.top);
+        placeHud(hudPreferredX, hudPreferredY);
       });
     }
   }
@@ -709,10 +711,13 @@
   }
 
   function saveHudState() {
-    const x = Number.parseFloat(elements.timerHud.style.left);
-    const y = Number.parseFloat(elements.timerHud.style.top);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    const state = { x, y, showStopped: hudShowStopped, sizeLevel: hudSizeLevel };
+    const state = {
+      x: hudPreferredX,
+      y: hudPreferredY,
+      showStopped: hudShowStopped,
+      sizeLevel: hudSizeLevel,
+      focusMode: hudFocusMode
+    };
     try {
       localStorage.setItem(HUD_STATE_KEY, JSON.stringify(state));
     } catch (error) {
@@ -720,7 +725,7 @@
     }
   }
 
-  function placeHud(x, y, persist = false) {
+  function placeHud(x, y) {
     const margin = 8;
     const width = elements.timerHud.offsetWidth;
     const height = elements.timerHud.offsetHeight;
@@ -734,7 +739,13 @@
     );
     elements.timerHud.style.left = `${Math.round(left)}px`;
     elements.timerHud.style.top = `${Math.round(top)}px`;
-    if (persist) saveHudState();
+  }
+
+  function rememberHudPosition(x, y) {
+    hudPreferredX = Number.isFinite(Number(x)) ? Number(x) : hudPreferredX;
+    hudPreferredY = Number.isFinite(Number(y)) ? Number(y) : hudPreferredY;
+    placeHud(hudPreferredX, hudPreferredY);
+    saveHudState();
   }
 
   function updateHudStoppedControl() {
@@ -749,22 +760,44 @@
     elements.timerHud.dataset.size = String(hudSizeLevel);
     elements.hudSizeDown.disabled = hudSizeLevel === 0;
     elements.hudSizeUp.disabled = hudSizeLevel === 2;
-    elements.hudDefaultSize.disabled = hudSizeLevel === 1;
     if (!persist) return;
     window.requestAnimationFrame(() => {
-      const rect = elements.timerHud.getBoundingClientRect();
-      placeHud(rect.left, rect.top, true);
+      placeHud(hudPreferredX, hudPreferredY);
+      saveHudState();
     });
+  }
+
+  function applyHudFocusMode() {
+    elements.body.dataset.focusMode = String(hudFocusMode);
+    elements.hudFocusMode.setAttribute("aria-pressed", String(hudFocusMode));
+    elements.hudFocusMode.textContent = hudFocusMode ? "Show page" : "Hide page";
+    elements.hudFocusMode.title = hudFocusMode
+      ? "Show the timer dashboard"
+      : "Hide the dashboard and keep only the overview";
+  }
+
+  function setHudFocusMode(shouldFocus) {
+    hudFocusMode = Boolean(shouldFocus);
+    if (hudFocusMode) {
+      elements.globalSoundControl.open = false;
+      [...openSettings].forEach((timerId) => setSettingsOpen(timerId, false));
+    }
+    applyHudFocusMode();
+    saveHudState();
   }
 
   function initializeHudDrag() {
     const saved = readHudState();
     hudShowStopped = saved?.showStopped === true;
     hudSizeLevel = Number.isInteger(saved?.sizeLevel) ? saved.sizeLevel : 1;
+    hudFocusMode = saved?.focusMode === true;
+    hudPreferredX = saved?.x ?? 18;
+    hudPreferredY = saved?.y ?? 92;
     updateHudStoppedControl();
     setHudSizeLevel(hudSizeLevel, false);
+    applyHudFocusMode();
     window.requestAnimationFrame(() => {
-      placeHud(saved?.x ?? 18, saved?.y ?? 92);
+      placeHud(hudPreferredX, hudPreferredY);
     });
 
     let drag = null;
@@ -776,7 +809,8 @@
         startX: event.clientX,
         startY: event.clientY,
         originX: rect.left,
-        originY: rect.top
+        originY: rect.top,
+        moved: false
       };
       elements.hudDragHandle.setPointerCapture(event.pointerId);
       elements.timerHud.classList.add("is-dragging");
@@ -784,6 +818,12 @@
     });
     elements.hudDragHandle.addEventListener("pointermove", (event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
+      if (
+        Math.abs(event.clientX - drag.startX) > 2 ||
+        Math.abs(event.clientY - drag.startY) > 2
+      ) {
+        drag.moved = true;
+      }
       placeHud(
         drag.originX + event.clientX - drag.startX,
         drag.originY + event.clientY - drag.startY
@@ -791,9 +831,16 @@
     });
     const finishDrag = (event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
+      const moved = drag.moved;
       drag = null;
       elements.timerHud.classList.remove("is-dragging");
-      saveHudState();
+      if (!moved) {
+        placeHud(hudPreferredX, hudPreferredY);
+        return;
+      }
+      const left = Number.parseFloat(elements.timerHud.style.left);
+      const top = Number.parseFloat(elements.timerHud.style.top);
+      rememberHudPosition(left, top);
     };
     elements.hudDragHandle.addEventListener("pointerup", finishDrag);
     elements.hudDragHandle.addEventListener("pointercancel", finishDrag);
@@ -810,15 +857,13 @@
       event.preventDefault();
       const rect = elements.timerHud.getBoundingClientRect();
       const distance = event.shiftKey ? 40 : 12;
-      placeHud(
+      rememberHudPosition(
         rect.left + direction[0] * distance,
-        rect.top + direction[1] * distance,
-        true
+        rect.top + direction[1] * distance
       );
     });
     window.addEventListener("resize", () => {
-      const rect = elements.timerHud.getBoundingClientRect();
-      placeHud(rect.left, rect.top, true);
+      placeHud(hudPreferredX, hudPreferredY);
     });
 
     elements.hudShowStopped.addEventListener("click", () => {
@@ -826,11 +871,10 @@
       updateHudStoppedControl();
       saveHudState();
       render();
+      window.requestAnimationFrame(() => placeHud(hudPreferredX, hudPreferredY));
     });
 
-    elements.hudDefaultSize.addEventListener("click", () => {
-      setHudSizeLevel(1);
-    });
+    elements.hudFocusMode.addEventListener("click", () => setHudFocusMode(!hudFocusMode));
     elements.hudSizeDown.addEventListener("click", () => setHudSizeLevel(hudSizeLevel - 1));
     elements.hudSizeUp.addEventListener("click", () => setHudSizeLevel(hudSizeLevel + 1));
   }
@@ -877,7 +921,9 @@
     elements.alertTray.classList.remove("is-visible");
     elements.hudAlertReset.hidden = true;
     trayHandle = window.setTimeout(() => {
-      if (revision === trayRevision) elements.alertTray.hidden = true;
+      if (revision !== trayRevision) return;
+      elements.alertTray.hidden = true;
+      window.requestAnimationFrame(() => placeHud(hudPreferredX, hudPreferredY));
     }, 220);
   }
 
@@ -933,8 +979,7 @@
     window.requestAnimationFrame(() => {
       if (revision !== trayRevision) return;
       elements.alertTray.classList.add("is-visible");
-      const rect = elements.timerHud.getBoundingClientRect();
-      placeHud(rect.left, rect.top);
+      placeHud(hudPreferredX, hudPreferredY);
     });
   }
 

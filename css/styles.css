@@ -155,6 +155,17 @@ select:disabled {
   min-height: 100dvh;
   margin: 0 auto;
   padding: 0 clamp(12px, 2.5vw, 28px) max(22px, env(safe-area-inset-bottom));
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 220ms ease,
+    visibility 220ms;
+}
+
+body[data-focus-mode="true"] .app-shell {
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
 }
 
 .app-sticky {
@@ -394,7 +405,7 @@ h3 {
   align-items: center;
 }
 
-.timer-hud__default-size,
+.timer-hud__focus-mode,
 .timer-hud__size-step {
   align-self: stretch;
   border: 0;
@@ -402,7 +413,7 @@ h3 {
   color: var(--faint);
 }
 
-.timer-hud__default-size {
+.timer-hud__focus-mode {
   padding: 0 7px;
   font-size: 0.59rem;
   font-weight: 720;
@@ -415,7 +426,7 @@ h3 {
   font-size: 0.9rem;
 }
 
-.timer-hud__default-size:hover,
+.timer-hud__focus-mode:hover,
 .timer-hud__size-step:hover:not(:disabled) {
   color: var(--text-soft);
   background: #22252c;
