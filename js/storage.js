@@ -30,13 +30,23 @@
 
   const TIMER_SOUNDS = new Set([
     "glass-ping",
+    "crystal-chirp",
+    "triple-spark",
+    "high-beacon",
     "bright-bell",
     "soft-chime",
     "double-tap",
     "signal-drop",
     "wood-block"
   ]);
-  const MAIN_SOUNDS = new Set(["glass-ping", "bright-bell", "soft-chime"]);
+  const MAIN_SOUNDS = new Set([
+    "glass-ping",
+    "crystal-chirp",
+    "triple-spark",
+    "high-beacon",
+    "bright-bell",
+    "soft-chime"
+  ]);
   const REMINDER_SOUNDS = new Set(["double-tap", "signal-drop", "wood-block"]);
 
   const DEFAULT_TIMERS = Object.freeze([

@@ -61,7 +61,14 @@
     ? ALERT_COLORS
     : ["red", "amber", "cyan", "blue", "violet", "green", "pink"];
   const timerLimit = Number.isFinite(MAX_TIMERS) ? MAX_TIMERS : 64;
-  const mainSounds = new Set(["glass-ping", "bright-bell", "soft-chime"]);
+  const mainSounds = new Set([
+    "glass-ping",
+    "crystal-chirp",
+    "triple-spark",
+    "high-beacon",
+    "bright-bell",
+    "soft-chime"
+  ]);
   const HUD_STATE_KEY = "interval-timer.hud-position.v1";
 
   const now = () => performance.now();

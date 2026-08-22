@@ -12,6 +12,8 @@ A lightweight dashboard for independent interval timers. The main page uses a co
 
 Each timer has its own name, interval, repeat mode, sound, alert duration, color, and completion-color option. A finite timer stops after its chosen number of alerts. An **Until stopped** timer keeps repeating until its own Reset button is used.
 
+The sound picker includes three clear high-frequency cues: **Crystal Chirp**, **Triple Spark**, and **High Beacon**. Use the **Test** button in a timer's settings to compare them at the current volume.
+
 Each gear opens that timer's settings in a modal. Click the backdrop, use **Done**, the close button, or press <kbd>Esc</kbd> to close it. Dragging from a field onto the backdrop does not accidentally close the modal.
 
 Use **Earlier** and **Later** in a timer's settings to rearrange it. The saved order is shared by the dashboard and floating overview, and moving a running timer does not restart or rebase its countdown.

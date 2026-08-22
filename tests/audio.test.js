@@ -163,6 +163,26 @@ test("main, secondary, and completion cues build distinct local sound patterns",
   }
 });
 
+test("high-pitched cues use distinct rhythmic patterns", async () => {
+  const previousAudioContext = globalThis.AudioContext;
+  globalThis.AudioContext = FakeAudioContext;
+
+  try {
+    const audio = new AudioManager();
+
+    await audio.playMain("crystal-chirp", { enabled: true, volume: 100 });
+    assert.equal(audio.context.sources.length, 2);
+
+    await audio.playMain("triple-spark", { enabled: true, volume: 100 });
+    assert.equal(audio.context.sources.length, 5);
+
+    await audio.playMain("high-beacon", { enabled: true, volume: 100 });
+    assert.equal(audio.context.sources.length, 9);
+  } finally {
+    globalThis.AudioContext = previousAudioContext;
+  }
+});
+
 test("stopAll invalidates and stops every active scheduled source", async () => {
   const previousAudioContext = globalThis.AudioContext;
   globalThis.AudioContext = FakeAudioContext;

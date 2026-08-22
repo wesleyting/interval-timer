@@ -43,6 +43,60 @@
 
     async playMain(style, options = {}) {
       return this._play(options, (context, start, ownerKey) => {
+        if (style === "crystal-chirp") {
+          // Two quick upward chirps cut through background audio without the
+          // long metallic tail of Glass Ping.
+          this._sweep(context, 987.77, 1567.98, start, 0.09, 0.62, 0.12, "sine", ownerKey);
+          this._sweep(
+            context,
+            1318.51,
+            2093,
+            start + 0.13,
+            0.085,
+            0.5,
+            0.13,
+            "sine",
+            ownerKey
+          );
+          return;
+        }
+
+        if (style === "triple-spark") {
+          // A short three-note rhythm remains recognizable when a game or
+          // music masks one of the individual notes.
+          [1318.51, 1760, 2093].forEach((frequency, index) => {
+            this._tone(
+              context,
+              frequency,
+              start + index * 0.105,
+              0.045,
+              index === 2 ? 0.62 : 0.5,
+              0.13,
+              "triangle",
+              ownerKey
+            );
+          });
+          return;
+        }
+
+        if (style === "high-beacon") {
+          // Alternating pitches make this cue more urgent and easier to pick
+          // out than a single bell, while keeping each note brief.
+          [1174.66, 1567.98, 1174.66, 1975.53].forEach((frequency, index) => {
+            this._tone(
+              context,
+              frequency,
+              start + index * 0.095,
+              0.035,
+              index === 3 ? 0.62 : 0.46,
+              0.11,
+              index % 2 === 0 ? "triangle" : "sine",
+              ownerKey
+            );
+          });
+          return;
+        }
+
         if (style === "bright-bell") {
           this._tone(context, 659.25, start, 0.1, 0.72, 0.38, "triangle", ownerKey);
           this._tone(context, 987.77, start + 0.015, 0.07, 0.4, 0.42, "sine", ownerKey);

@@ -132,6 +132,15 @@ test("v3 preserves an empty timer list and caps corrupted oversized lists", () =
   assert.equal(sanitizePreferences({ timers: oversized }).timers.length, MAX_TIMERS);
 });
 
+test("v3 preserves the additional high-pitched timer sounds", () => {
+  for (const sound of ["crystal-chirp", "triple-spark", "high-beacon"]) {
+    const preferences = sanitizePreferences({
+      timers: [{ ...DEFAULT_PREFERENCES.timers[0], sound }]
+    });
+    assert.equal(preferences.timers[0].sound, sound);
+  }
+});
+
 test("v3 preferences round-trip finite and infinite timers", () => {
   const storage = memoryStorage();
   const saved = savePreferences(
