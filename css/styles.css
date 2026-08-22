@@ -1434,8 +1434,47 @@ body[data-alert-color] .timer-settings::backdrop {
   justify-self: end;
 }
 
+.timer-order-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.timer-order-controls > span {
+  color: var(--faint);
+  font-size: 0.65rem;
+  font-weight: 740;
+}
+
+.timer-order-controls .mini-button {
+  min-height: 36px;
+  padding-inline: 9px;
+  white-space: nowrap;
+}
+
 .timer-settings__footer .control-feedback {
   grid-column: 1 / -1;
+}
+
+@media (max-width: 520px) {
+  .timer-settings__footer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .timer-order-controls {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .timer-settings__footer .button--danger {
+    grid-column: 1;
+  }
+
+  .timer-settings__footer .button--primary {
+    grid-column: 2;
+  }
 }
 
 .control-feedback {

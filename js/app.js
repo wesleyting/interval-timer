@@ -260,6 +260,8 @@
       "test-sound",
       "alert-duration",
       "persistent-completion",
+      "move-earlier",
+      "move-later",
       "remove",
       "feedback"
     ];
@@ -292,6 +294,8 @@
     nodes.reset.setAttribute("aria-label", `Reset ${timer.label}`);
     nodes["test-sound"].setAttribute("aria-label", `Test ${timer.label} sound`);
     nodes.remove.setAttribute("aria-label", `Remove ${timer.label}`);
+    nodes["move-earlier"].setAttribute("aria-label", `Move ${timer.label} earlier`);
+    nodes["move-later"].setAttribute("aria-label", `Move ${timer.label} later`);
     nodes.minutes.setAttribute("aria-label", `${timer.label} interval minutes`);
     nodes.seconds.setAttribute("aria-label", `${timer.label} interval seconds`);
     nodes["total-alerts"].setAttribute("aria-label", `${timer.label} number of alerts`);
@@ -459,6 +463,8 @@
         if (input.checked) commitColor(timer.id, input.value);
       });
     });
+    nodes["move-earlier"].addEventListener("click", () => moveTimer(timer.id, -1));
+    nodes["move-later"].addEventListener("click", () => moveTimer(timer.id, 1));
     nodes.remove.addEventListener("click", () => removeTimer(timer.id));
   }
 
@@ -572,6 +578,15 @@
     nodes["test-sound"].title = nodes["test-sound"].disabled
       ? "Turn on sound and raise the volume to test this cue."
       : `Test ${timer.label} sound`;
+    const timerIndex = preferences.timers.findIndex((entry) => entry.id === timer.id);
+    nodes["move-earlier"].disabled = timerIndex <= 0;
+    nodes["move-later"].disabled = timerIndex < 0 || timerIndex >= preferences.timers.length - 1;
+    nodes["move-earlier"].title = nodes["move-earlier"].disabled
+      ? `${timer.label} is already first.`
+      : `Move ${timer.label} one position earlier`;
+    nodes["move-later"].title = nodes["move-later"].disabled
+      ? `${timer.label} is already last.`
+      : `Move ${timer.label} one position later`;
     nodes["settings-toggle"].setAttribute(
       "aria-label",
       `${openSettings.has(timer.id) ? "Close" : "Open"} settings for ${timer.label}`
@@ -1624,6 +1639,32 @@
       id = `timer-${Date.now().toString(36)}-${timerIdSequence.toString(36)}`;
     } while (existing.has(id));
     return id;
+  }
+
+  function moveTimer(timerId, direction) {
+    const fromIndex = preferences.timers.findIndex((timer) => timer.id === timerId);
+    if (fromIndex < 0) return;
+    const toIndex = Math.min(
+      preferences.timers.length - 1,
+      Math.max(0, fromIndex + Math.sign(direction))
+    );
+    if (toIndex === fromIndex) return;
+
+    const reordered = preferences.timers.slice();
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setSettingsOpen(timerId, false);
+    persistPreferences({ ...preferences, timers: reordered });
+    const events = engine.syncTimers(timerDefinitions(), now());
+    presentEvents(events);
+    renderTimerCards();
+    setSettingsOpen(timerId, true);
+    const nodes = cardNodes.get(timerId);
+    const target = direction < 0 ? nodes?.["move-earlier"] : nodes?.["move-later"];
+    window.requestAnimationFrame(() => target?.focus());
+    const message = `${moved.label} moved to position ${toIndex + 1}.`;
+    setCardFeedback(timerId, message);
+    syncRuntimeServices();
   }
 
   function nextTimerLabel() {
