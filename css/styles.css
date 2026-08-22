@@ -331,7 +331,6 @@ h3 {
   width: min(var(--hud-width, 280px), calc(100vw - 16px));
   min-width: min(220px, calc(100vw - 16px));
   max-width: calc(100vw - 16px);
-  max-height: min(76dvh, 680px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -518,11 +517,10 @@ h3 {
 
 .timer-hud__list {
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   margin: 0;
   padding: 5px 7px 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
   display: grid;
   grid-auto-rows: max-content;
   align-content: start;

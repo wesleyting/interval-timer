@@ -614,7 +614,7 @@
         return;
       }
       if (runtime?.phase === "complete") {
-        resetTimer(timerId);
+        restartTimer(timerId);
         return;
       }
       startTimer(timerId);
@@ -643,7 +643,7 @@
           : isRunning
             ? "Running"
             : "Stopped";
-      const action = isRunning ? "Alert now" : runtime.phase === "complete" ? "Reset" : "Start";
+      const action = isRunning ? "Alert now" : runtime.phase === "complete" ? "Restart" : "Start";
       const progress = timer.alertMode === "finite"
         ? `${runtime.completedAlerts}/${timer.alertCount}`
         : "";
@@ -662,14 +662,14 @@
         isRunning
           ? `Alert now for ${timer.label}. ${display} remaining.${progress ? ` ${progress} alerts.` : ""}`
           : runtime.phase === "complete"
-            ? `Reset ${timer.label}. Timer complete${progress ? ` at ${progress} alerts` : ""}.`
+            ? `Restart ${timer.label}. Timer complete${progress ? ` at ${progress} alerts` : ""}.`
             : `Start ${timer.label}. Interval ${display}.${progress ? ` ${progress} alerts.` : ""}`
       );
       hudRow.button.title =
         isRunning
           ? `Alert now for ${timer.label}`
           : runtime.phase === "complete"
-            ? `Reset ${timer.label}`
+            ? `Restart ${timer.label}`
             : `Start ${timer.label}`;
       const currentAtIndex = elements.hudTimerList.children[index];
       if (currentAtIndex !== hudRow.item) {
@@ -959,7 +959,7 @@
       elements.alertTrayMessage.hidden = detail.length === 0;
       elements.hudAlertReset.hidden = event.type !== "timer-complete";
       elements.hudAlertReset.dataset.timerId = event.timerId;
-      elements.hudAlertReset.textContent = `Reset ${timer.label}`;
+      elements.hudAlertReset.textContent = `Restart ${timer.label}`;
       elements.hudAlertDismiss.setAttribute("aria-label", `Dismiss ${timer.label} notice`);
       elements.hudAlertDismiss.title =
         event.type === "timer-complete"
@@ -1427,6 +1427,12 @@
     syncRuntimeServices();
   }
 
+  function restartTimer(timerId) {
+    if (!preferenceTimer(timerId)) return;
+    resetTimer(timerId);
+    startTimer(timerId);
+  }
+
   function validDurationParts(minutesInput, secondsInput) {
     const minutesText = minutesInput.value.trim();
     const secondsText = secondsInput.value.trim();
@@ -1772,7 +1778,7 @@
   });
   elements.hudAlertReset.addEventListener("click", () => {
     const timerId = elements.hudAlertReset.dataset.timerId;
-    if (timerId) resetTimer(timerId);
+    if (timerId) restartTimer(timerId);
   });
   elements.globalSoundControl.addEventListener("toggle", updateGlobalControls);
   elements.soundEnabledInput.addEventListener("change", () => {
