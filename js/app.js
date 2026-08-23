@@ -46,7 +46,7 @@
     hudAlertKicker: document.getElementById("hudAlertKicker"),
     hudAlertTitle: document.getElementById("hudAlertTitle"),
     hudAlertDismiss: document.getElementById("hudAlertDismiss"),
-    hudAlertReset: document.getElementById("hudAlertReset"),
+    hudAlertAction: document.getElementById("hudAlertAction"),
     soundEnabledInput: document.getElementById("soundEnabledInput"),
     soundEnabledLabel: document.getElementById("soundEnabledLabel"),
     volumeInput: document.getElementById("volumeInput"),
@@ -941,7 +941,7 @@
     trayEvents = [];
     window.clearTimeout(trayHandle);
     elements.alertTray.classList.remove("is-visible");
-    elements.hudAlertReset.hidden = true;
+    elements.hudAlertAction.hidden = true;
     trayHandle = window.setTimeout(() => {
       if (revision !== trayRevision) return;
       elements.alertTray.hidden = true;
@@ -979,9 +979,13 @@
             : "";
       elements.alertTrayMessage.textContent = detail;
       elements.alertTrayMessage.hidden = detail.length === 0;
-      elements.hudAlertReset.hidden = event.type !== "timer-complete";
-      elements.hudAlertReset.dataset.timerId = event.timerId;
-      elements.hudAlertReset.textContent = `Restart ${timer.label}`;
+      const isComplete = event.type === "timer-complete";
+      elements.hudAlertAction.hidden = false;
+      elements.hudAlertAction.dataset.timerId = event.timerId;
+      elements.hudAlertAction.dataset.action = isComplete ? "restart" : "stop";
+      elements.hudAlertAction.textContent = isComplete
+        ? `Restart ${timer.label}`
+        : `Stop ${timer.label}`;
       elements.hudAlertDismiss.setAttribute("aria-label", `Dismiss ${timer.label} notice`);
       elements.hudAlertDismiss.title =
         event.type === "timer-complete"
@@ -992,8 +996,9 @@
       elements.hudAlertTitle.textContent = "Heads up";
       elements.alertTrayMessage.textContent = message;
       elements.alertTrayMessage.hidden = false;
-      elements.hudAlertReset.hidden = true;
-      delete elements.hudAlertReset.dataset.timerId;
+      elements.hudAlertAction.hidden = true;
+      delete elements.hudAlertAction.dataset.timerId;
+      delete elements.hudAlertAction.dataset.action;
       elements.hudAlertDismiss.setAttribute("aria-label", "Dismiss timer notice");
       elements.hudAlertDismiss.title = "Dismiss this notice.";
     }
@@ -1824,9 +1829,18 @@
     trayEvents = [];
     showPendingCompletionNotice();
   });
-  elements.hudAlertReset.addEventListener("click", () => {
-    const timerId = elements.hudAlertReset.dataset.timerId;
-    if (timerId) restartTimer(timerId);
+  elements.hudAlertAction.addEventListener("click", () => {
+    const timerId = elements.hudAlertAction.dataset.timerId;
+    const action = elements.hudAlertAction.dataset.action;
+    const timer = preferenceTimer(timerId);
+    if (!timer) return;
+    if (action === "restart") {
+      restartTimer(timerId);
+      announce(`${timer.label} restarted.`);
+    } else if (action === "stop") {
+      resetTimer(timerId);
+      announce(`${timer.label} stopped.`);
+    }
   });
   elements.globalSoundControl.addEventListener("toggle", updateGlobalControls);
   elements.soundEnabledInput.addEventListener("change", () => {
