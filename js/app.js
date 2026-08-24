@@ -339,6 +339,11 @@
     });
   }
 
+  function applySettingsOverlay() {
+    const settingsOverHiddenPage = hudFocusMode && openSettings.size > 0;
+    elements.body.dataset.settingsOverlay = String(settingsOverHiddenPage);
+  }
+
   function setSettingsOpen(timerId, shouldOpen, focusName = false) {
     const nodes = cardNodes.get(timerId);
     if (!nodes) return;
@@ -349,10 +354,12 @@
         if (openTimerId !== timerId) setSettingsOpen(openTimerId, false);
       });
       openSettings.add(timerId);
+      applySettingsOverlay();
       if (!dialog.open) dialog.showModal();
     } else {
       openSettings.delete(timerId);
       if (dialog.open) dialog.close();
+      applySettingsOverlay();
     }
     nodes["settings-toggle"].setAttribute("aria-expanded", String(shouldOpen));
     const timer = preferenceTimer(timerId);
@@ -421,6 +428,7 @@
     nodes["settings-done"].addEventListener("click", closeSettings);
     nodes["settings-panel"].addEventListener("close", () => {
       openSettings.delete(timer.id);
+      applySettingsOverlay();
       nodes["settings-toggle"].setAttribute("aria-expanded", "false");
       const current = preferenceTimer(timer.id);
       if (current) {
@@ -628,18 +636,11 @@
     progress.className = "timer-hud__progress";
     button.append(identity, time, progress);
 
-    const controls = document.createElement("span");
-    controls.className = "timer-hud__row-controls";
     const reset = document.createElement("button");
-    reset.className = "timer-hud__row-control";
+    reset.className = "timer-hud__reset";
     reset.type = "button";
-    reset.textContent = "Reset";
-    const settings = document.createElement("button");
-    settings.className = "timer-hud__row-control";
-    settings.type = "button";
-    settings.textContent = "Settings";
-    controls.append(reset, settings);
-    item.append(button, controls);
+    reset.textContent = "↻";
+    item.append(button, reset);
     button.addEventListener("click", () => {
       const runtime = runtimeTimer(timerId);
       if (runtime?.phase === "running") {
@@ -659,13 +660,8 @@
       resetTimer(timerId);
       announce(`${timer.label} reset and stopped.`);
     });
-    settings.addEventListener("click", () => {
-      if (!preferenceTimer(timerId)) return;
-      if (hudFocusMode) setHudFocusMode(false);
-      setSettingsOpen(timerId, true);
-    });
 
-    const hudRow = { item, button, name, state, time, progress, reset, settings };
+    const hudRow = { item, button, name, state, time, progress, reset };
     hudRows.set(timerId, hudRow);
     return hudRow;
   }
@@ -700,9 +696,8 @@
       hudRow.time.textContent = display;
       hudRow.progress.textContent = progress;
       hudRow.progress.hidden = progress.length === 0;
-      hudRow.reset.disabled = runtime.phase === "idle";
+      hudRow.reset.hidden = runtime.phase === "idle";
       hudRow.reset.setAttribute("aria-label", `Reset and stop ${timer.label}`);
-      hudRow.settings.setAttribute("aria-label", `Open settings for ${timer.label}`);
       hudRow.button.setAttribute(
         "aria-label",
         isRunning
@@ -823,6 +818,7 @@
       [...openSettings].forEach((timerId) => setSettingsOpen(timerId, false));
     }
     applyHudFocusMode();
+    applySettingsOverlay();
     saveHudState();
   }
 
@@ -848,7 +844,6 @@
   function openTimerSettingsByIndex(index) {
     const timer = preferences.timers[index];
     if (!timer) return;
-    if (hudFocusMode) setHudFocusMode(false);
     setSettingsOpen(timer.id, true);
     announce(`Settings opened for ${timer.label}.`);
   }
