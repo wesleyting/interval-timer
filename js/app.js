@@ -95,6 +95,8 @@
   let hudShowStopped = false;
   let hudSizeLevel = 1;
   let hudFocusMode = false;
+  let hudHidden = false;
+  let altShortcutPending = false;
   let hudPreferredX = 18;
   let hudPreferredY = 92;
 
@@ -624,11 +626,20 @@
     time.className = "timer-hud__time";
     const progress = document.createElement("span");
     progress.className = "timer-hud__progress";
-    const action = document.createElement("span");
-    action.className = "timer-hud__action";
-    action.textContent = "Alert now";
-    button.append(identity, time, progress, action);
-    item.append(button);
+    button.append(identity, time, progress);
+
+    const controls = document.createElement("span");
+    controls.className = "timer-hud__row-controls";
+    const reset = document.createElement("button");
+    reset.className = "timer-hud__row-control";
+    reset.type = "button";
+    reset.textContent = "Reset";
+    const settings = document.createElement("button");
+    settings.className = "timer-hud__row-control";
+    settings.type = "button";
+    settings.textContent = "Settings";
+    controls.append(reset, settings);
+    item.append(button, controls);
     button.addEventListener("click", () => {
       const runtime = runtimeTimer(timerId);
       if (runtime?.phase === "running") {
@@ -641,8 +652,20 @@
       }
       startTimer(timerId);
     });
+    reset.addEventListener("click", () => {
+      const timer = preferenceTimer(timerId);
+      const runtime = runtimeTimer(timerId);
+      if (!timer || runtime?.phase === "idle") return;
+      resetTimer(timerId);
+      announce(`${timer.label} reset and stopped.`);
+    });
+    settings.addEventListener("click", () => {
+      if (!preferenceTimer(timerId)) return;
+      if (hudFocusMode) setHudFocusMode(false);
+      setSettingsOpen(timerId, true);
+    });
 
-    const hudRow = { item, button, name, state, time, progress, action };
+    const hudRow = { item, button, name, state, time, progress, reset, settings };
     hudRows.set(timerId, hudRow);
     return hudRow;
   }
@@ -665,7 +688,6 @@
           : isRunning
             ? "Running"
             : "Stopped";
-      const action = isRunning ? "Alert now" : runtime.phase === "complete" ? "Restart" : "Start";
       const progress = timer.alertMode === "finite"
         ? `${runtime.completedAlerts}/${timer.alertCount}`
         : "";
@@ -678,7 +700,9 @@
       hudRow.time.textContent = display;
       hudRow.progress.textContent = progress;
       hudRow.progress.hidden = progress.length === 0;
-      hudRow.action.textContent = action;
+      hudRow.reset.disabled = runtime.phase === "idle";
+      hudRow.reset.setAttribute("aria-label", `Reset and stop ${timer.label}`);
+      hudRow.settings.setAttribute("aria-label", `Open settings for ${timer.label}`);
       hudRow.button.setAttribute(
         "aria-label",
         isRunning
@@ -687,12 +711,6 @@
             ? `Restart ${timer.label}. Timer complete${progress ? ` at ${progress} alerts` : ""}.`
             : `Start ${timer.label}. Interval ${display}.${progress ? ` ${progress} alerts.` : ""}`
       );
-      hudRow.button.title =
-        isRunning
-          ? `Alert now for ${timer.label}`
-          : runtime.phase === "complete"
-            ? `Restart ${timer.label}`
-            : `Start ${timer.label}`;
       const currentAtIndex = elements.hudTimerList.children[index];
       if (currentAtIndex !== hudRow.item) {
         elements.hudTimerList.insertBefore(hudRow.item, currentAtIndex || null);
@@ -806,6 +824,73 @@
     }
     applyHudFocusMode();
     saveHudState();
+  }
+
+  function setHudHidden(shouldHide) {
+    hudHidden = Boolean(shouldHide);
+    elements.body.dataset.hudHidden = String(hudHidden);
+    elements.timerHud.setAttribute("aria-hidden", String(hudHidden));
+    if (hudHidden && elements.timerHud.contains(document.activeElement)) {
+      document.activeElement.blur();
+    } else if (!hudHidden) {
+      window.requestAnimationFrame(() => placeHud(hudPreferredX, hudPreferredY));
+    }
+  }
+
+  function shortcutIsBlocked(event) {
+    const target = event.target;
+    const isEditing =
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.matches("input, textarea, select"));
+    return isEditing || document.querySelector("dialog[open]") !== null;
+  }
+
+  function openTimerSettingsByIndex(index) {
+    const timer = preferences.timers[index];
+    if (!timer) return;
+    if (hudFocusMode) setHudFocusMode(false);
+    setSettingsOpen(timer.id, true);
+    announce(`Settings opened for ${timer.label}.`);
+  }
+
+  function handleGlobalShortcutKeyDown(event) {
+    if (event.key === "Alt") {
+      event.preventDefault();
+      if (!event.repeat) altShortcutPending = true;
+      return;
+    }
+
+    if (event.altKey) altShortcutPending = false;
+    if (
+      event.repeat ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      shortcutIsBlocked(event)
+    ) {
+      return;
+    }
+
+    if (event.code === "Space") {
+      event.preventDefault();
+      setHudFocusMode(!hudFocusMode);
+      return;
+    }
+
+    if (/^[1-9]$/.test(event.key)) {
+      const index = Number(event.key) - 1;
+      if (preferences.timers[index]) {
+        event.preventDefault();
+        openTimerSettingsByIndex(index);
+      }
+    }
+  }
+
+  function handleGlobalShortcutKeyUp(event) {
+    if (event.key !== "Alt") return;
+    event.preventDefault();
+    if (altShortcutPending) setHudHidden(!hudHidden);
+    altShortcutPending = false;
   }
 
   function initializeHudDrag() {
@@ -1887,6 +1972,11 @@
     presentEvents(engine.reconcile(now()));
     render();
     syncRuntimeServices();
+  });
+  window.addEventListener("keydown", handleGlobalShortcutKeyDown);
+  window.addEventListener("keyup", handleGlobalShortcutKeyUp);
+  window.addEventListener("blur", () => {
+    altShortcutPending = false;
   });
   window.addEventListener("pagehide", releaseWakeLock);
   window.addEventListener("beforeunload", releaseWakeLock);
