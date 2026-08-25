@@ -1060,12 +1060,13 @@
       elements.alertTrayMessage.textContent = detail;
       elements.alertTrayMessage.hidden = detail.length === 0;
       const isComplete = event.type === "timer-complete";
-      elements.hudAlertAction.hidden = false;
-      elements.hudAlertAction.dataset.timerId = event.timerId;
-      elements.hudAlertAction.dataset.action = isComplete ? "restart" : "stop";
-      elements.hudAlertAction.textContent = isComplete
-        ? `Restart ${timer.label}`
-        : `Stop ${timer.label}`;
+      elements.hudAlertAction.hidden = !isComplete;
+      if (isComplete) {
+        elements.hudAlertAction.dataset.timerId = event.timerId;
+        elements.hudAlertAction.textContent = `Restart ${timer.label}`;
+      } else {
+        delete elements.hudAlertAction.dataset.timerId;
+      }
       elements.hudAlertDismiss.setAttribute("aria-label", `Dismiss ${timer.label} notice`);
       elements.hudAlertDismiss.title =
         event.type === "timer-complete"
@@ -1078,7 +1079,6 @@
       elements.alertTrayMessage.hidden = false;
       elements.hudAlertAction.hidden = true;
       delete elements.hudAlertAction.dataset.timerId;
-      delete elements.hudAlertAction.dataset.action;
       elements.hudAlertDismiss.setAttribute("aria-label", "Dismiss timer notice");
       elements.hudAlertDismiss.title = "Dismiss this notice.";
     }
@@ -1911,16 +1911,10 @@
   });
   elements.hudAlertAction.addEventListener("click", () => {
     const timerId = elements.hudAlertAction.dataset.timerId;
-    const action = elements.hudAlertAction.dataset.action;
     const timer = preferenceTimer(timerId);
     if (!timer) return;
-    if (action === "restart") {
-      restartTimer(timerId);
-      announce(`${timer.label} restarted.`);
-    } else if (action === "stop") {
-      resetTimer(timerId);
-      announce(`${timer.label} stopped.`);
-    }
+    restartTimer(timerId);
+    announce(`${timer.label} restarted.`);
   });
   elements.globalSoundControl.addEventListener("toggle", updateGlobalControls);
   elements.soundEnabledInput.addEventListener("change", () => {
