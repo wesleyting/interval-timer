@@ -425,6 +425,31 @@ body[data-hud-hidden="true"] .timer-hud {
   letter-spacing: -0.28em;
 }
 
+.timer-hud__dwell-status {
+  margin-left: auto;
+  padding: 3px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #aeb4bf;
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.timer-hud[data-size="0"] .timer-hud__dwell-status {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: #8e96a3;
+  color: transparent;
+}
+
 .timer-hud__size-controls {
   align-self: stretch;
   display: flex;
@@ -569,6 +594,35 @@ body[data-hud-hidden="true"] .timer-hud {
   background: transparent;
   color: var(--text);
   text-align: left;
+  overflow: hidden;
+}
+
+.timer-hud__timer::after,
+.timer-hud__reset::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.timer-hud__timer::after {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  border-radius: 0 0 9px 9px;
+  background: var(--timer-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.timer-hud[data-dwell-mode="true"] .timer-hud__timer.is-dwelling {
+  border-color: rgba(var(--timer-accent-rgb), 0.42);
+  background: rgba(var(--timer-accent-rgb), 0.08);
+  cursor: progress;
+}
+
+.timer-hud[data-dwell-mode="true"] .timer-hud__timer.is-dwelling::after {
+  animation: hud-dwell-across 950ms linear forwards;
 }
 
 .timer-hud__item {
@@ -596,12 +650,41 @@ body[data-hud-hidden="true"] .timer-hud {
   font-size: 0.94rem;
   font-weight: 700;
   line-height: 1;
+  overflow: hidden;
   opacity: 0.72;
   transition:
     opacity var(--transition-fast),
     border-color var(--transition-fast),
     background var(--transition-fast),
     color var(--transition-fast);
+}
+
+.timer-hud__reset::after {
+  inset: 0;
+  background: rgba(255, 255, 255, 0.14);
+  transform: scaleY(0);
+  transform-origin: bottom;
+}
+
+.timer-hud[data-dwell-mode="true"] .timer-hud__reset.is-dwelling {
+  cursor: progress;
+  opacity: 1;
+}
+
+.timer-hud[data-dwell-mode="true"] .timer-hud__reset.is-dwelling::after {
+  animation: hud-dwell-up 1450ms linear forwards;
+}
+
+@keyframes hud-dwell-across {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes hud-dwell-up {
+  to {
+    transform: scaleY(1);
+  }
 }
 
 .timer-hud__reset:hover,

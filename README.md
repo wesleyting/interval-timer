@@ -22,6 +22,8 @@ The floating overview shows running timers by default. Use the subtle **Show sto
 
 Keyboard shortcuts work when a settings field is not active: press **Space** to hide or show the main page, tap **Alt** by itself to hide or show the floating overview, and press **1** through **9** to open settings for that timer position. When the main page is hidden, number-key settings appear by themselves without revealing the dashboard behind them.
 
+Press **Tab** to toggle hover controls. While enabled, a subtle **Hover on** marker appears in the overview title bar. Rest the pointer over a timer's large countdown area until its loading bar fills to perform its normal Start, Alert now, or Restart action. The corner reset icon uses a slower fill before stopping its timer. Every hover action fires only once and requires leaving the control before it can be armed again. Hover controls work over a visible overview even when the browser window is not focused, subject to browser and operating-system pointer handling; they cannot receive the pointer through another window or from an inactive browser tab.
+
 Alerts do not block the page. The matching card is highlighted and the page receives a strong timer-colored background tint, while the floating overview remains readable above it. A finite timer can keep its chosen page tint after completion until that timer is reset. Several completed timers can coexist; the most recently completed persistent timer controls the current page tint.
 
 Preferences save automatically in `localStorage`, but active countdowns are intentionally not restored after a refresh. Existing settings from the older main-timer/reminder versions migrate into ordinary independent timer cards.

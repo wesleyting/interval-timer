@@ -34,6 +34,7 @@
     addTimerButton: document.getElementById("addTimerButton"),
     timerHud: document.getElementById("timerHud"),
     hudDragHandle: document.getElementById("hudDragHandle"),
+    hudDwellStatus: document.getElementById("hudDwellStatus"),
     hudFocusMode: document.getElementById("hudFocusMode"),
     hudSizeDown: document.getElementById("hudSizeDown"),
     hudSizeUp: document.getElementById("hudSizeUp"),
@@ -70,6 +71,8 @@
     "soft-chime"
   ]);
   const HUD_STATE_KEY = "interval-timer.hud-position.v1";
+  const HUD_DWELL_ACTION_MS = 950;
+  const HUD_DWELL_RESET_MS = 1450;
 
   const now = () => performance.now();
   let preferences = ensureTimersAvailable(loadPreferences());
@@ -96,6 +99,7 @@
   let hudSizeLevel = 1;
   let hudFocusMode = false;
   let hudHidden = false;
+  let hudDwellMode = false;
   let altShortcutPending = false;
   let hudPreferredX = 18;
   let hudPreferredY = 92;
@@ -641,7 +645,7 @@
     reset.type = "button";
     reset.textContent = "↻";
     item.append(button, reset);
-    button.addEventListener("click", () => {
+    const activateTimer = () => {
       const runtime = runtimeTimer(timerId);
       if (runtime?.phase === "running") {
         alertNow(timerId);
@@ -652,16 +656,33 @@
         return;
       }
       startTimer(timerId);
-    });
-    reset.addEventListener("click", () => {
+    };
+    const resetTimerFromHud = () => {
       const timer = preferenceTimer(timerId);
       const runtime = runtimeTimer(timerId);
       if (!timer || runtime?.phase === "idle") return;
       resetTimer(timerId);
       announce(`${timer.label} reset and stopped.`);
-    });
+    };
+    button.addEventListener("click", activateTimer);
+    reset.addEventListener("click", resetTimerFromHud);
 
-    const hudRow = { item, button, name, state, time, progress, reset };
+    const cancelButtonDwell = attachHudDwell(
+      button,
+      HUD_DWELL_ACTION_MS,
+      activateTimer
+    );
+    const cancelResetDwell = attachHudDwell(
+      reset,
+      HUD_DWELL_RESET_MS,
+      resetTimerFromHud
+    );
+    const cancelDwell = () => {
+      cancelButtonDwell();
+      cancelResetDwell();
+    };
+
+    const hudRow = { item, button, name, state, time, progress, reset, cancelDwell };
     hudRows.set(timerId, hudRow);
     return hudRow;
   }
@@ -714,6 +735,7 @@
 
     hudRows.forEach((hudRow, timerId) => {
       if (activeIds.has(timerId)) return;
+      hudRow.cancelDwell();
       hudRow.item.remove();
       hudRows.delete(timerId);
     });
@@ -751,7 +773,8 @@
       y: hudPreferredY,
       showStopped: hudShowStopped,
       sizeLevel: hudSizeLevel,
-      focusMode: hudFocusMode
+      focusMode: hudFocusMode,
+      hoverMode: hudDwellMode
     };
     try {
       localStorage.setItem(HUD_STATE_KEY, JSON.stringify(state));
@@ -826,11 +849,73 @@
     hudHidden = Boolean(shouldHide);
     elements.body.dataset.hudHidden = String(hudHidden);
     elements.timerHud.setAttribute("aria-hidden", String(hudHidden));
+    if (hudHidden) cancelAllHudDwells();
     if (hudHidden && elements.timerHud.contains(document.activeElement)) {
       document.activeElement.blur();
     } else if (!hudHidden) {
       window.requestAnimationFrame(() => placeHud(hudPreferredX, hudPreferredY));
     }
+  }
+
+  function attachHudDwell(element, delayMs, activate) {
+    let handle = null;
+    let consumed = false;
+
+    const cancel = () => {
+      window.clearTimeout(handle);
+      handle = null;
+      element.classList.remove("is-dwelling");
+    };
+    const reset = () => {
+      cancel();
+      consumed = false;
+    };
+
+    element.addEventListener("pointerenter", (event) => {
+      if (
+        !hudDwellMode ||
+        consumed ||
+        event.pointerType === "touch" ||
+        element.disabled ||
+        element.hidden
+      ) {
+        return;
+      }
+      cancel();
+      element.classList.add("is-dwelling");
+      handle = window.setTimeout(() => {
+        handle = null;
+        element.classList.remove("is-dwelling");
+        if (!hudDwellMode || element.disabled || element.hidden) return;
+        consumed = true;
+        activate();
+      }, delayMs);
+    });
+    element.addEventListener("pointerleave", reset);
+    element.addEventListener("pointercancel", reset);
+    element.addEventListener("pointerdown", () => {
+      cancel();
+      consumed = true;
+    });
+
+    return reset;
+  }
+
+  function cancelAllHudDwells() {
+    hudRows.forEach((hudRow) => hudRow.cancelDwell());
+  }
+
+  function applyHudDwellMode() {
+    elements.timerHud.dataset.dwellMode = String(hudDwellMode);
+    elements.hudDwellStatus.hidden = !hudDwellMode;
+  }
+
+  function setHudDwellMode(shouldEnable) {
+    hudDwellMode = Boolean(shouldEnable);
+    cancelAllHudDwells();
+    applyHudDwellMode();
+    saveHudState();
+    announce(`Hover controls ${hudDwellMode ? "on" : "off"}.`);
   }
 
   function shortcutIsBlocked(event) {
@@ -872,6 +957,12 @@
       return;
     }
 
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault();
+      setHudDwellMode(!hudDwellMode);
+      return;
+    }
+
     if (/^[1-9]$/.test(event.key)) {
       const index = Number(event.key) - 1;
       if (preferences.timers[index]) {
@@ -893,11 +984,13 @@
     hudShowStopped = saved?.showStopped === true;
     hudSizeLevel = Number.isInteger(saved?.sizeLevel) ? saved.sizeLevel : 1;
     hudFocusMode = saved?.focusMode === true;
+    hudDwellMode = saved?.hoverMode === true;
     hudPreferredX = saved?.x ?? 18;
     hudPreferredY = saved?.y ?? 92;
     updateHudStoppedControl();
     setHudSizeLevel(hudSizeLevel, false);
     applyHudFocusMode();
+    applyHudDwellMode();
     window.requestAnimationFrame(() => {
       placeHud(hudPreferredX, hudPreferredY);
     });
@@ -1950,7 +2043,10 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
+    if (document.visibilityState !== "visible") {
+      cancelAllHudDwells();
+      return;
+    }
     if (!engine.getSnapshot(now()).hasRunningTimers) return;
     presentEvents(engine.reconcile(now()));
     render();
