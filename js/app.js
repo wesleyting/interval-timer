@@ -1460,6 +1460,11 @@
     });
   }
 
+  function unlockAudioFromGesture() {
+    if (!preferences.soundEnabled || preferences.volume === 0) return;
+    observeAudioUnlock(audio.unlock());
+  }
+
   async function previewTimerSound(timerId) {
     const timer = preferenceTimer(timerId);
     if (!timer) return;
@@ -1602,7 +1607,7 @@
   function startTimer(timerId) {
     const timer = preferenceTimer(timerId);
     if (!timer) return;
-    if (preferences.soundEnabled) observeAudioUnlock(audio.unlock());
+    unlockAudioFromGesture();
     clearTimerPresentation(timerId);
     const started = engine.start(timerId, now());
     if (!started) return;
@@ -2016,7 +2021,7 @@
       soundEnabled: elements.soundEnabledInput.checked
     });
     if (preferences.soundEnabled && preferences.volume > 0) {
-      observeAudioUnlock(audio.unlock());
+      unlockAudioFromGesture();
     }
     render();
   });
@@ -2058,6 +2063,8 @@
     render();
     syncRuntimeServices();
   });
+  window.addEventListener("pointerdown", unlockAudioFromGesture, true);
+  window.addEventListener("keydown", unlockAudioFromGesture, true);
   window.addEventListener("keydown", handleGlobalShortcutKeyDown);
   window.addEventListener("keyup", handleGlobalShortcutKeyUp);
   window.addEventListener("blur", () => {
