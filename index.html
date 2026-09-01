@@ -25,6 +25,15 @@
           </div>
 
           <div class="header-actions">
+            <button
+              id="helpButton"
+              class="header-button help-button"
+              type="button"
+              aria-label="Open timer guide"
+            >
+              <span aria-hidden="true">?</span>
+            </button>
+
             <details id="globalSoundControl" class="sound-menu">
               <summary class="header-button">
                 <span class="header-button__icon" aria-hidden="true">&#9835;</span>
@@ -85,6 +94,93 @@
 
       </main>
     </div>
+
+    <dialog
+      id="onboardingDialog"
+      class="onboarding-dialog"
+      aria-labelledby="onboardingTitle"
+    >
+      <header class="onboarding-dialog__header">
+        <div>
+          <p id="onboardingStepLabel" class="eyebrow" aria-live="polite">Quick tour · 1 of 4</p>
+          <h2 id="onboardingTitle">Welcome to your timers</h2>
+        </div>
+        <button
+          id="onboardingClose"
+          class="icon-button"
+          type="button"
+          aria-label="Close timer guide"
+        >
+          &times;
+        </button>
+      </header>
+
+      <div class="onboarding-dialog__body">
+        <section class="onboarding-step" data-onboarding-step="0">
+          <p class="onboarding-step__lead">
+            Run several timers independently without one timer resetting another.
+          </p>
+          <div class="onboarding-feature-grid">
+            <article>
+              <strong>Start separately</strong>
+              <span>Each countdown has its own schedule and repeat mode.</span>
+            </article>
+            <article>
+              <strong>Make it yours</strong>
+              <span>Choose the time, sound, alert color, and number of repeats.</span>
+            </article>
+            <article>
+              <strong>Keep it visible</strong>
+              <span>The floating overview stays useful while the main page is hidden.</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="1" hidden>
+          <p class="onboarding-step__lead">The floating overview is the quickest way to run everything.</p>
+          <ul class="onboarding-list">
+            <li><strong>Click a countdown</strong> to Start, Alert now, or Restart it.</li>
+            <li><strong>Use the small ↻ icon</strong> to stop and reset only that timer.</li>
+            <li><strong>Drag the title bar</strong> to place the overview beside another app.</li>
+            <li><strong>Use − and +</strong> to choose one of three overview sizes.</li>
+          </ul>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="2" hidden>
+          <p class="onboarding-step__lead">Useful controls are always one key away.</p>
+          <dl class="shortcut-grid">
+            <div><dt><kbd>Space</kbd></dt><dd>Hide or show the main page</dd></div>
+            <div><dt><kbd>Alt</kbd></dt><dd>Hide or show the overview</dd></div>
+            <div><dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Open that timer’s settings</dd></div>
+            <div><dt><kbd>Tab</kbd></dt><dd>Toggle hover controls</dd></div>
+          </dl>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="3" hidden>
+          <p class="onboarding-step__lead">Hover controls let you act without clicking.</p>
+          <ul class="onboarding-list">
+            <li>Press <kbd>Tab</kbd>, then rest over a countdown until its bar fills.</li>
+            <li>The reset icon fills more slowly to prevent accidental resets.</li>
+            <li>Move away before the same hover action can activate again.</li>
+            <li>After opening the page, one real click or key press prepares browser sound.</li>
+          </ul>
+          <p class="onboarding-note">You can reopen this guide anytime with the ? button.</p>
+        </section>
+      </div>
+
+      <footer class="onboarding-dialog__footer">
+        <div id="onboardingDots" class="onboarding-dots" aria-label="Guide progress">
+          <span data-onboarding-dot="0" aria-current="step"></span>
+          <span data-onboarding-dot="1"></span>
+          <span data-onboarding-dot="2"></span>
+          <span data-onboarding-dot="3"></span>
+        </div>
+        <div class="onboarding-dialog__actions">
+          <button id="onboardingBack" class="button button--quiet" type="button" disabled>Back</button>
+          <button id="onboardingNext" class="button button--primary" type="button">Next</button>
+        </div>
+      </footer>
+    </dialog>
 
     <aside id="timerHud" class="timer-hud" aria-label="Floating timer overview">
       <header class="timer-hud__dragbar">

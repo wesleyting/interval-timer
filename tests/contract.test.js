@@ -54,3 +54,12 @@ test("direct-open scripts remain classic deferred relative assets", () => {
   ]);
   assert.doesNotMatch(html, /<script[^>]+type=["']module["']/i);
 });
+
+test("onboarding guide has matching ordered steps and progress markers", () => {
+  const steps = matches(html, /\bdata-onboarding-step=["'](\d+)["']/g);
+  const dots = matches(html, /\bdata-onboarding-dot=["'](\d+)["']/g);
+
+  assert.deepEqual(steps, ["0", "1", "2", "3"]);
+  assert.deepEqual(dots, steps);
+  assert.match(html, /id=["']helpButton["']/);
+});

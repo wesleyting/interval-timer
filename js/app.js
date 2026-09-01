@@ -32,6 +32,15 @@
     timersEmpty: document.getElementById("timersEmpty"),
     timerCardTemplate: document.getElementById("timerCardTemplate"),
     addTimerButton: document.getElementById("addTimerButton"),
+    helpButton: document.getElementById("helpButton"),
+    onboardingDialog: document.getElementById("onboardingDialog"),
+    onboardingClose: document.getElementById("onboardingClose"),
+    onboardingTitle: document.getElementById("onboardingTitle"),
+    onboardingStepLabel: document.getElementById("onboardingStepLabel"),
+    onboardingBack: document.getElementById("onboardingBack"),
+    onboardingNext: document.getElementById("onboardingNext"),
+    onboardingSteps: [...document.querySelectorAll("[data-onboarding-step]")],
+    onboardingDots: [...document.querySelectorAll("[data-onboarding-dot]")],
     timerHud: document.getElementById("timerHud"),
     hudDragHandle: document.getElementById("hudDragHandle"),
     hudDwellStatus: document.getElementById("hudDwellStatus"),
@@ -71,6 +80,13 @@
     "soft-chime"
   ]);
   const HUD_STATE_KEY = "interval-timer.hud-position.v1";
+  const ONBOARDING_STATE_KEY = "interval-timer.onboarding.v1";
+  const ONBOARDING_TITLES = [
+    "Welcome to your timers",
+    "Run everything from the overview",
+    "Keep the shortcuts close",
+    "Try hover controls"
+  ];
   const HUD_DWELL_ACTION_MS = 950;
   const HUD_DWELL_RESET_MS = 1450;
 
@@ -101,6 +117,8 @@
   let hudHidden = false;
   let hudDwellMode = false;
   let altShortcutPending = false;
+  let onboardingStep = 0;
+  let onboardingSeenThisSession = false;
   let hudPreferredX = 18;
   let hudPreferredY = 92;
 
@@ -379,6 +397,109 @@
         nodes.name.focus();
         nodes.name.select();
       });
+    }
+  }
+
+  function onboardingWasSeen() {
+    if (onboardingSeenThisSession) return true;
+    try {
+      return localStorage.getItem(ONBOARDING_STATE_KEY) === "complete";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function rememberOnboardingSeen() {
+    onboardingSeenThisSession = true;
+    try {
+      localStorage.setItem(ONBOARDING_STATE_KEY, "complete");
+    } catch (error) {
+      // The guide still remains dismissible when browser storage is unavailable.
+    }
+  }
+
+  function renderOnboardingStep() {
+    const lastIndex = elements.onboardingSteps.length - 1;
+    onboardingStep = Math.min(lastIndex, Math.max(0, onboardingStep));
+    elements.onboardingSteps.forEach((step, index) => {
+      step.hidden = index !== onboardingStep;
+    });
+    elements.onboardingDots.forEach((dot, index) => {
+      if (index === onboardingStep) dot.setAttribute("aria-current", "step");
+      else dot.removeAttribute("aria-current");
+    });
+    elements.onboardingStepLabel.textContent =
+      `Quick tour · ${onboardingStep + 1} of ${elements.onboardingSteps.length}`;
+    elements.onboardingTitle.textContent = ONBOARDING_TITLES[onboardingStep];
+    elements.onboardingBack.disabled = onboardingStep === 0;
+    elements.onboardingNext.textContent = onboardingStep === lastIndex ? "Done" : "Next";
+  }
+
+  function closeOnboarding() {
+    rememberOnboardingSeen();
+    if (elements.onboardingDialog.open) elements.onboardingDialog.close();
+    elements.helpButton.focus();
+  }
+
+  function openOnboarding() {
+    elements.globalSoundControl.open = false;
+    [...openSettings].forEach((timerId) => setSettingsOpen(timerId, false));
+    onboardingStep = 0;
+    renderOnboardingStep();
+    if (!elements.onboardingDialog.open) elements.onboardingDialog.showModal();
+  }
+
+  function initializeOnboarding() {
+    elements.helpButton.addEventListener("click", openOnboarding);
+    elements.onboardingClose.addEventListener("click", closeOnboarding);
+    elements.onboardingBack.addEventListener("click", () => {
+      onboardingStep -= 1;
+      renderOnboardingStep();
+    });
+    elements.onboardingNext.addEventListener("click", () => {
+      if (onboardingStep >= elements.onboardingSteps.length - 1) {
+        closeOnboarding();
+        return;
+      }
+      onboardingStep += 1;
+      renderOnboardingStep();
+    });
+    elements.onboardingDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeOnboarding();
+    });
+    elements.onboardingDialog.addEventListener("close", rememberOnboardingSeen);
+
+    let backdropPointerId = null;
+    const isOutsideDialog = (event) => {
+      const rect = elements.onboardingDialog.getBoundingClientRect();
+      return (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      );
+    };
+    elements.onboardingDialog.addEventListener("pointerdown", (event) => {
+      backdropPointerId =
+        event.target === elements.onboardingDialog && isOutsideDialog(event)
+          ? event.pointerId
+          : null;
+    });
+    elements.onboardingDialog.addEventListener("pointerup", (event) => {
+      const shouldClose =
+        backdropPointerId === event.pointerId &&
+        event.target === elements.onboardingDialog &&
+        isOutsideDialog(event);
+      backdropPointerId = null;
+      if (shouldClose) closeOnboarding();
+    });
+    elements.onboardingDialog.addEventListener("pointercancel", () => {
+      backdropPointerId = null;
+    });
+
+    if (!onboardingWasSeen()) {
+      window.requestAnimationFrame(openOnboarding);
     }
   }
 
@@ -2078,4 +2199,5 @@
   initializeHudDrag();
   updateGlobalControls();
   renderTimerCards();
+  initializeOnboarding();
 })();

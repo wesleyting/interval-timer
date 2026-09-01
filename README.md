@@ -12,6 +12,8 @@ A lightweight dashboard for independent interval timers. The main page uses a co
 
 Each timer has its own name, interval, repeat mode, sound, alert duration, color, and completion-color option. A finite timer stops after its chosen number of alerts. An **Until stopped** timer keeps repeating until its own Reset button is used.
 
+On first use, a four-step guide introduces independent timers, the floating overview, keyboard shortcuts, and hover controls. Use the persistent **?** button in the header whenever you want to see the guide again.
+
 Sound is enabled at full volume by default. The first click or key press anywhere in the timer prepares browser audio, so starting from a card, the overview, or a keyboard shortcut enables later alerts without opening the Sound menu. Browsers still require one real user interaction after a fresh page load; a hover by itself cannot grant audio permission. The sound picker includes three clear high-frequency cues: **Crystal Chirp**, **Triple Spark**, and **High Beacon**. Use the **Test** button in a timer's settings to compare them at the current volume.
 
 Each gear opens that timer's settings in a modal. Click the backdrop, use **Done**, the close button, or press <kbd>Esc</kbd> to close it. Dragging from a field onto the backdrop does not accidentally close the modal.
@@ -32,11 +34,12 @@ The scheduler uses monotonic timestamps instead of decrementing counters. If the
 
 ## Defaults
 
-- Main timer: stopped, 1 minute 2 seconds, 29 alerts, red, Glass Ping
-- Item reminder: stopped, 1 minute 30 seconds, repeats until stopped, amber, Double Tap
+- Focus session: stopped, 25 minutes, one alert, blue, Glass Ping
+- Short break: stopped, 5 minutes, one alert, green, Soft Chime
+- Water reminder: stopped, 30 minutes, repeats until stopped, cyan, Crystal Chirp
 - Sound: on at 100% volume
-- Visual alert duration: 3 seconds for Main timer, 1.4 seconds for Item reminder
-- Main timer completion color: stays visible until Reset
+- Visual alert duration: 4 seconds for Focus session, 3 seconds for Short break, 2.5 seconds for Water reminder
+- Focus session completion color: stays visible until Reset
 
 ## Files
 

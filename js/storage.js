@@ -51,27 +51,39 @@
 
   const DEFAULT_TIMERS = Object.freeze([
     Object.freeze({
-      id: "main-timer",
-      label: "Main timer",
+      id: "focus-session",
+      label: "Focus session",
       enabled: true,
-      intervalSeconds: 62,
+      intervalSeconds: 1500,
       alertMode: "finite",
-      alertCount: 29,
+      alertCount: 1,
       sound: "glass-ping",
-      alertColor: ALERT_COLORS[0],
-      alertDurationSeconds: 3,
+      alertColor: "blue",
+      alertDurationSeconds: 4,
       persistCompletionBackground: true
     }),
     Object.freeze({
-      id: "item-reminder",
-      label: "Item reminder",
+      id: "short-break",
+      label: "Short break",
       enabled: true,
-      intervalSeconds: 90,
+      intervalSeconds: 300,
+      alertMode: "finite",
+      alertCount: 1,
+      sound: "soft-chime",
+      alertColor: "green",
+      alertDurationSeconds: 3,
+      persistCompletionBackground: false
+    }),
+    Object.freeze({
+      id: "water-reminder",
+      label: "Water reminder",
+      enabled: true,
+      intervalSeconds: 1800,
       alertMode: "infinite",
       alertCount: 1,
-      sound: "double-tap",
-      alertColor: ALERT_COLORS[1],
-      alertDurationSeconds: 1.4,
+      sound: "crystal-chirp",
+      alertColor: "cyan",
+      alertDurationSeconds: 2.5,
       persistCompletionBackground: false
     })
   ]);

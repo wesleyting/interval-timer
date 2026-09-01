@@ -299,6 +299,15 @@ h3 {
   font-size: 1rem;
 }
 
+.help-button {
+  width: 44px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 850;
+}
+
 .sound-menu {
   position: relative;
 }
@@ -1281,6 +1290,213 @@ body[data-hud-hidden="true"] .timer-hud {
   line-height: 1;
 }
 
+.onboarding-dialog {
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(760px, calc(100dvh - 24px));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #454a56;
+  border-radius: 20px;
+  background: #15171c;
+  color: var(--text);
+  box-shadow: 0 34px 110px rgba(0, 0, 0, 0.78);
+}
+
+.onboarding-dialog:not([open]) {
+  display: none;
+}
+
+.onboarding-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.onboarding-dialog[open] {
+  animation: settings-in 180ms ease-out;
+}
+
+.onboarding-dialog__header {
+  min-height: 78px;
+  padding: 17px 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  background: #191b21;
+}
+
+.onboarding-dialog__header h2 {
+  margin-top: 4px;
+  font-size: 1.35rem;
+}
+
+.onboarding-dialog__body {
+  max-height: calc(100dvh - 205px);
+  padding: 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.onboarding-step {
+  min-height: 265px;
+}
+
+.onboarding-step__lead {
+  max-width: 54ch;
+  margin: 0 0 18px;
+  color: #f1f2f5;
+  font-size: 1.03rem;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
+.onboarding-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.onboarding-feature-grid article {
+  min-width: 0;
+  padding: 15px;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #1b1e24;
+}
+
+.onboarding-feature-grid strong {
+  font-size: 0.8rem;
+}
+
+.onboarding-feature-grid span,
+.onboarding-list,
+.onboarding-note,
+.shortcut-grid dd {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.onboarding-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 12px;
+}
+
+.onboarding-list strong {
+  color: var(--text);
+}
+
+.shortcut-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shortcut-grid > div {
+  min-width: 0;
+  padding: 13px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #1b1e24;
+}
+
+.shortcut-grid dt,
+.shortcut-grid dd {
+  margin: 0;
+}
+
+kbd {
+  min-width: 32px;
+  padding: 5px 7px;
+  display: inline-block;
+  border: 1px solid #555b68;
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  background: #24272e;
+  color: #f4f5f7;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 820;
+  line-height: 1;
+  text-align: center;
+}
+
+.onboarding-note {
+  margin: 18px 0 0;
+  padding: 11px 13px;
+  border-left: 3px solid #7196dd;
+  border-radius: 0 9px 9px 0;
+  background: rgba(113, 150, 221, 0.08);
+}
+
+.onboarding-dialog__footer {
+  min-height: 72px;
+  padding: 13px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+  background: #191b21;
+}
+
+.onboarding-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.onboarding-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #4b505b;
+  transition:
+    width var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.onboarding-dots span[aria-current="step"] {
+  width: 20px;
+  background: #9ab9f2;
+}
+
+.onboarding-dialog__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.onboarding-dialog__actions .button {
+  min-width: 88px;
+}
+
+@media (max-width: 560px) {
+  .onboarding-dialog__body {
+    padding: 18px;
+  }
+
+  .onboarding-step {
+    min-height: 0;
+  }
+
+  .onboarding-feature-grid,
+  .shortcut-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .timer-settings {
   width: min(680px, calc(100vw - 24px));
   max-height: min(820px, calc(100dvh - 24px));
@@ -1810,6 +2026,10 @@ input[type="range"] {
   .add-timer-button {
     padding-inline: 9px;
     font-size: 0.7rem;
+  }
+
+  .help-button {
+    padding: 0;
   }
 
   .timer-card {

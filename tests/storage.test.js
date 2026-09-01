@@ -41,12 +41,14 @@ test("missing or broken data returns fresh v3 defaults", () => {
   assert.deepEqual(
     missing.timers.map((timer) => [timer.label, timer.alertMode, timer.alertColor]),
     [
-      ["Main timer", "finite", "red"],
-      ["Item reminder", "infinite", "amber"]
+      ["Focus session", "finite", "blue"],
+      ["Short break", "finite", "green"],
+      ["Water reminder", "infinite", "cyan"]
     ]
   );
-  assert.equal(missing.timers[0].alertDurationSeconds, 3);
-  assert.equal(missing.timers[1].alertDurationSeconds, 1.4);
+  assert.equal(missing.timers[0].alertDurationSeconds, 4);
+  assert.equal(missing.timers[1].alertDurationSeconds, 3);
+  assert.equal(missing.timers[2].alertDurationSeconds, 2.5);
 });
 
 test("v3 timer fields are sanitized and duplicate ids are repaired", () => {
@@ -87,11 +89,11 @@ test("v3 timer fields are sanitized and duplicate ids are repaired", () => {
   assert.deepEqual(preferences.timers, [
     {
       id: "same",
-      label: "Main timer",
+      label: "Focus session",
       enabled: true,
-      intervalSeconds: 62,
+      intervalSeconds: 1500,
       alertMode: "finite",
-      alertCount: 29,
+      alertCount: 1,
       sound: "glass-ping",
       alertColor: "red",
       alertDurationSeconds: 15,
@@ -106,7 +108,7 @@ test("v3 timer fields are sanitized and duplicate ids are repaired", () => {
       alertCount: 1,
       sound: "wood-block",
       alertColor: "cyan",
-      alertDurationSeconds: 1.4,
+      alertDurationSeconds: 3,
       persistCompletionBackground: true
     }
   ]);
@@ -320,6 +322,6 @@ test("restore defaults writes v3 and returns independent nested objects", () => 
   assert.deepEqual(second, DEFAULT_PREFERENCES);
   assert.notStrictEqual(first.timers, second.timers);
   first.timers[0].label = "Changed locally";
-  assert.equal(second.timers[0].label, "Main timer");
+  assert.equal(second.timers[0].label, "Focus session");
   assert.deepEqual(JSON.parse(storage.value(STORAGE_KEY)), DEFAULT_PREFERENCES);
 });
